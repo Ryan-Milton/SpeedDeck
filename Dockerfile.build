@@ -1,0 +1,39 @@
+FROM --platform=linux/amd64 python:3.11-slim AS backend-builder
+
+RUN pip install --no-cache-dir pyserial pynmea2 websockets pyinstaller
+
+WORKDIR /app/backend
+COPY backend/ .
+
+RUN pyinstaller \
+    --onefile \
+    --name gps-speedometer-backend \
+    --hidden-import serial \
+    --hidden-import pynmea2 \
+    --hidden-import websockets \
+    gps_speedometer/__main__.py
+
+
+FROM --platform=linux/amd64 node:20-slim AS frontend-builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgtk-3-0 libnotify4 libnss3 libxss1 libxtst6 xdg-utils \
+    libatspi2.0-0 libsecret-1-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app/frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+
+COPY frontend/ .
+COPY --from=backend-builder /app/backend/dist/gps-speedometer-backend /app/backend/dist/gps-speedometer-backend
+
+# Copy map resources if they exist
+COPY frontend/resources/ resources/
+
+RUN npx electron-vite build
+RUN npx electron-builder --linux AppImage --publish never
+
+
+FROM scratch AS output
+COPY --from=frontend-builder /app/frontend/dist/*.AppImage /

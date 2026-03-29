@@ -1,0 +1,14 @@
+{
+  "version": 8,
+  "name": "GPS Speedometer Dark",
+  "sources": {},
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "#111114"
+      }
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+@theme {
+  --font-mono: 'DM Mono', ui-monospace, monospace;
+}
+
+@layer base {
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: #09090b;
+    color: #f4f4f5;
+    overflow: hidden;
+    font-family: system-ui, -apple-system, sans-serif;
+  }
+
+  ::-webkit-scrollbar {
+    display: none;
+  }
+}
