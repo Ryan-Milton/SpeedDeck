@@ -1,95 +1,12 @@
 import { useEffect, useRef } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import { Protocol } from 'pmtiles'
 import { useTripViewerStore } from '../../stores/trip-viewer-store'
 import { haversineDistance } from '../../lib/utils'
+import { resolveMapStyle, speedToColor } from '../../lib/map-style'
 import type { Trackpoint } from '../../types/gps'
 
-// Plain dark background — ultimate fallback when no tiles available
-const DARK_STYLE: maplibregl.StyleSpecification = {
-  version: 8,
-  name: 'Dark',
-  sources: {},
-  layers: [
-    {
-      id: 'background',
-      type: 'background',
-      paint: { 'background-color': '#111114' }
-    }
-  ]
-}
-
-// Carto Dark Matter — free, no API key, dark vector tiles
-const CARTO_DARK_STYLE = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
-
 const MAX_GRADIENT_STOPS = 200
-
-// Register PMTiles protocol once
-let pmtilesRegistered = false
-function ensurePmtilesProtocol(): void {
-  if (pmtilesRegistered) return
-  const protocol = new Protocol()
-  maplibregl.addProtocol('pmtiles', protocol.tile)
-  pmtilesRegistered = true
-}
-
-/**
- * Determine the best available map style:
- * 1. Online → Carto Dark Matter
- * 2. Offline + local PMTiles → local dark style
- * 3. Offline + no tiles → plain dark background
- */
-async function resolveMapStyle(): Promise<string | maplibregl.StyleSpecification> {
-  // Check online connectivity
-  if (navigator.onLine) {
-    try {
-      // Quick fetch test to confirm real connectivity (navigator.onLine can lie)
-      const resp = await fetch(CARTO_DARK_STYLE, { method: 'HEAD', signal: AbortSignal.timeout(3000) })
-      if (resp.ok) return CARTO_DARK_STYLE
-    } catch {
-      // Not actually online, fall through
-    }
-  }
-
-  // Offline — check for local PMTiles
-  try {
-    const resp = await fetch('local-resource://map/basemap.pmtiles', {
-      method: 'HEAD',
-      signal: AbortSignal.timeout(1000)
-    })
-    if (resp.ok) {
-      ensurePmtilesProtocol()
-      // Return inline style referencing local PMTiles
-      return {
-        version: 8,
-        name: 'Offline Dark',
-        sources: {
-          openmaptiles: {
-            type: 'vector',
-            url: 'pmtiles://local-resource://map/basemap.pmtiles'
-          }
-        },
-        layers: [
-          { id: 'background', type: 'background', paint: { 'background-color': '#111114' } },
-          { id: 'water', type: 'fill', source: 'openmaptiles', 'source-layer': 'water', paint: { 'fill-color': '#1a1a2e' } },
-          { id: 'landcover', type: 'fill', source: 'openmaptiles', 'source-layer': 'landcover', paint: { 'fill-color': '#1a1a1f' } },
-          { id: 'landuse', type: 'fill', source: 'openmaptiles', 'source-layer': 'landuse', paint: { 'fill-color': '#18181b', 'fill-opacity': 0.5 } },
-          { id: 'road-minor', type: 'line', source: 'openmaptiles', 'source-layer': 'transportation', filter: ['in', 'class', 'minor', 'service', 'track'], paint: { 'line-color': '#222228', 'line-width': 1 } },
-          { id: 'road-secondary', type: 'line', source: 'openmaptiles', 'source-layer': 'transportation', filter: ['in', 'class', 'secondary', 'tertiary'], paint: { 'line-color': '#27272a', 'line-width': 1.5 } },
-          { id: 'road-primary', type: 'line', source: 'openmaptiles', 'source-layer': 'transportation', filter: ['in', 'class', 'primary', 'trunk'], paint: { 'line-color': '#2d2d33', 'line-width': 2 } },
-          { id: 'road-motorway', type: 'line', source: 'openmaptiles', 'source-layer': 'transportation', filter: ['==', 'class', 'motorway'], paint: { 'line-color': '#33333a', 'line-width': 3 } },
-          { id: 'building', type: 'fill', source: 'openmaptiles', 'source-layer': 'building', paint: { 'fill-color': '#1c1c22', 'fill-opacity': 0.6 } }
-        ]
-      }
-    }
-  } catch {
-    // No local tiles available
-  }
-
-  // Ultimate fallback
-  return DARK_STYLE
-}
 
 export function TripMap(): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -102,7 +19,6 @@ export function TripMap(): React.JSX.Element {
     let cancelled = false
 
     const initMap = async (): Promise<void> => {
-      // Small delay so container has final size
       await new Promise((r) => setTimeout(r, 50))
       if (cancelled || !containerRef.current) return
 
@@ -279,10 +195,4 @@ function addMarkers(map: maplibregl.Map, trackpoints: Trackpoint[]): void {
   new maplibregl.Marker({ element: endEl })
     .setLngLat([last.longitude, last.latitude])
     .addTo(map)
-}
-
-function speedToColor(ratio: number): string {
-  const r = ratio < 0.5 ? Math.round(ratio * 2 * 255) : 255
-  const g = ratio < 0.5 ? 255 : Math.round((1 - (ratio - 0.5) * 2) * 255)
-  return `rgb(${r}, ${g}, 40)`
 }
