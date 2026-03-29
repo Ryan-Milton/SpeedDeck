@@ -2,6 +2,15 @@
 
 A real-time GPS speedometer HUD designed for the Steam Deck. Reads NMEA data from a USB GNSS receiver, displays a full dashboard with speed, heading, altitude, coordinates, and satellite info, and records trips with speed heatmap visualization and elevation profiles.
 
+### Active HUD
+![Active HUD](docs/images/hud-active.png)
+
+### Trip Summary with Speed Heatmap
+![Trip Summary](docs/images/trip-summary.png)
+
+### Settings & Recorded Trips
+![Recorded Trips](docs/images/recorded-trips.png)
+
 ## Features
 
 - **Large speed display** with 270-degree arc gauge, color-coded speed warnings
