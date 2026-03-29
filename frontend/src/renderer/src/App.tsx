@@ -13,6 +13,7 @@ import { TripDistance } from './components/hud/TripDistance'
 import { SpeedGraph } from './components/trip/SpeedGraph'
 import { SettingsPanel } from './components/settings/SettingsPanel'
 import { TripDetailView } from './components/trip/TripDetailView'
+import { TileDownloadOverlay } from './components/map/TileDownloadOverlay'
 import { LiveMap } from './components/map/LiveMap'
 import { MapOverlays } from './components/map/MapOverlays'
 import { convertSpeed } from './lib/utils'
@@ -78,6 +79,9 @@ export default function App(): React.JSX.Element {
 
       {/* Trip detail overlay */}
       <TripDetailView />
+
+      {/* Tile download overlay */}
+      <TileDownloadOverlay />
     </div>
   )
 }

@@ -12,6 +12,8 @@ interface SettingsState {
   showGraph: boolean
   settingsOpen: boolean
   viewMode: ViewMode
+  tilesAvailable: boolean
+  showTileDownload: boolean
 
   setSpeedUnit: (unit: SpeedUnit) => void
   cycleSpeedUnit: () => void
@@ -21,6 +23,8 @@ interface SettingsState {
   toggleSettings: () => void
   setViewMode: (mode: ViewMode) => void
   toggleViewMode: () => void
+  setTilesAvailable: (available: boolean) => void
+  setShowTileDownload: (show: boolean) => void
 }
 
 const UNIT_CYCLE: SpeedUnit[] = ['mph', 'kmh', 'knots']
@@ -35,6 +39,8 @@ export const useSettingsStore = create<SettingsState>()(
       showGraph: false,
       settingsOpen: false,
       viewMode: 'hud',
+      tilesAvailable: false,
+      showTileDownload: false,
 
       setSpeedUnit: (unit): void => set({ speedUnit: unit }),
 
@@ -59,7 +65,11 @@ export const useSettingsStore = create<SettingsState>()(
       setViewMode: (mode): void => set({ viewMode: mode }),
 
       toggleViewMode: (): void =>
-        set((s) => ({ viewMode: s.viewMode === 'hud' ? 'map' : 'hud' }))
+        set((s) => ({ viewMode: s.viewMode === 'hud' ? 'map' : 'hud' })),
+
+      setTilesAvailable: (available): void => set({ tilesAvailable: available }),
+
+      setShowTileDownload: (show): void => set({ showTileDownload: show })
     }),
     { name: 'gps-speedometer-settings' }
   )

@@ -35,28 +35,29 @@ export function MapOverlays(): React.JSX.Element {
     <div className="absolute inset-0 pointer-events-none flex flex-col justify-between" style={{ padding: 16 }}>
       {/* Top row */}
       <div className="flex items-start justify-between">
-        {/* Top-left: satellite status */}
-        <div className="pointer-events-auto rounded-lg" style={{ background: 'rgba(9,9,11,0.7)', padding: '8px 12px' }}>
-          <SatelliteInfo />
+        {/* Top-left: satellite status + heading */}
+        <div className="flex flex-col gap-2">
+          <div className="pointer-events-auto rounded-lg" style={{ background: 'rgba(9,9,11,0.7)', padding: '8px 12px' }}>
+            <SatelliteInfo />
+          </div>
+          <div className="rounded-lg flex items-baseline gap-2" style={{ background: 'rgba(9,9,11,0.7)', padding: '8px 16px' }}>
+            <span className="font-semibold tracking-[2px] text-zinc-100" style={{ fontSize: 28 }}>
+              {hasFix ? cardinal : '--'}
+            </span>
+            <span className="font-mono text-zinc-300" style={{ fontSize: 20 }}>
+              {displayHeading !== null ? `${displayHeading}°` : ''}
+            </span>
+          </div>
         </div>
 
-        {/* Top-right: heading */}
-        <div className="rounded-lg flex items-baseline gap-2" style={{ background: 'rgba(9,9,11,0.7)', padding: '8px 16px' }}>
-          <span className="font-semibold tracking-[2px] text-zinc-100" style={{ fontSize: 28 }}>
-            {hasFix ? cardinal : '--'}
-          </span>
-          <span className="font-mono text-zinc-300" style={{ fontSize: 20 }}>
-            {displayHeading !== null ? `${displayHeading}°` : ''}
-          </span>
+        {/* Top-right: speed */}
+        <div className="pointer-events-auto">
+          <MapSpeedWidget />
         </div>
       </div>
 
       {/* Bottom row */}
-      <div className="flex items-end justify-between">
-        {/* Bottom-left: speed */}
-        <div className="pointer-events-auto">
-          <MapSpeedWidget />
-        </div>
+      <div className="flex items-end justify-end">
 
         {/* Bottom-right: trip control */}
         <button
