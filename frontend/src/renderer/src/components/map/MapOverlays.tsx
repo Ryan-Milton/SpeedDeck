@@ -1,32 +1,11 @@
-import { useEffect, useRef, useCallback } from 'react'
 import { useGpsStore } from '../../stores/gps-store'
-import { useSettingsStore } from '../../stores/settings-store'
 import { SatelliteInfo } from '../hud/SatelliteInfo'
 import { MapSpeedWidget } from './MapSpeedWidget'
-import { cardinalDirection, cn } from '../../lib/utils'
-import { GpsWebSocketClient } from '../../lib/ws-client'
+import { cardinalDirection } from '../../lib/utils'
 
 export function MapOverlays(): React.JSX.Element {
   const heading = useGpsStore((s) => s.fix?.heading ?? 0)
   const hasFix = useGpsStore((s) => s.fix !== null && s.fix.fixQuality > 0)
-  const tripStatus = useGpsStore((s) => s.tripStatus)
-
-  const wsRef = useRef<GpsWebSocketClient | null>(null)
-
-  useEffect(() => {
-    const client = new GpsWebSocketClient('ws://127.0.0.1:8765')
-    wsRef.current = client
-    client.connect()
-    return (): void => client.disconnect()
-  }, [])
-
-  const handleTrip = useCallback(() => {
-    if (tripStatus === 'idle') {
-      wsRef.current?.send({ type: 'command', action: 'trip_start' })
-    } else {
-      wsRef.current?.send({ type: 'command', action: 'trip_stop' })
-    }
-  }, [tripStatus])
 
   const cardinal = cardinalDirection(heading)
   const displayHeading = hasFix ? Math.round(heading) : null
@@ -54,24 +33,6 @@ export function MapOverlays(): React.JSX.Element {
         <div className="pointer-events-auto">
           <MapSpeedWidget />
         </div>
-      </div>
-
-      {/* Bottom row */}
-      <div className="flex items-end justify-end">
-
-        {/* Bottom-right: trip control */}
-        <button
-          onClick={handleTrip}
-          className={cn(
-            'pointer-events-auto rounded-lg text-sm font-semibold tracking-[1px] border transition-colors',
-            tripStatus !== 'idle'
-              ? 'bg-red-900/60 text-red-400 border-red-800'
-              : 'bg-zinc-900/80 text-zinc-300 border-zinc-700'
-          )}
-          style={{ padding: '12px 24px', backdropFilter: 'blur(8px)' }}
-        >
-          {tripStatus !== 'idle' ? 'STOP TRIP' : 'START TRIP'}
-        </button>
       </div>
     </div>
   )

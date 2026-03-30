@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { useGpsConnection } from './hooks/useGpsConnection'
 import { useSwipeNavigation } from './hooks/useSwipeNavigation'
 import { useSettingsStore } from './stores/settings-store'
@@ -32,6 +33,20 @@ export default function App(): React.JSX.Element {
 
   const displaySpeed = Math.round(convertSpeed(smoothedSpeed, speedUnit))
   const isWarning = warningEnabled && displaySpeed > warningThreshold
+
+  // Auto-prompt tile download when switching to map view with no tiles
+  const promptedRef = useRef(false)
+  useEffect(() => {
+    if (viewMode !== 'map' || promptedRef.current) return
+    promptedRef.current = true
+    window.api.checkTilesExist().then((exists) => {
+      if (!exists) {
+        useSettingsStore.getState().setShowTileDownload(true)
+      } else {
+        useSettingsStore.getState().setTilesAvailable(true)
+      }
+    }).catch(() => {})
+  }, [viewMode])
 
   return (
     <div
