@@ -63,7 +63,13 @@ app.whenReady().then(async () => {
   // Serve cached map tiles from userData
   protocol.handle('tile-cache', (request) => {
     const url = new URL(request.url)
-    const tilePath = join(getCacheDir(), url.pathname)
+    const cacheDir = getCacheDir()
+    const tilePath = join(cacheDir, url.pathname)
+    // Prevent path traversal — resolved path must be inside the cache dir
+    const resolved = require('path').resolve(tilePath)
+    if (!resolved.startsWith(require('path').resolve(cacheDir))) {
+      return new Response('Forbidden', { status: 403 })
+    }
     if (!existsSync(tilePath)) {
       return new Response('Not found', { status: 404 })
     }

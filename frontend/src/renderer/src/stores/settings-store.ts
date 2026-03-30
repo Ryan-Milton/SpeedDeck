@@ -71,6 +71,12 @@ export const useSettingsStore = create<SettingsState>()(
 
       setShowTileDownload: (show): void => set({ showTileDownload: show })
     }),
-    { name: 'gps-speedometer-settings' }
+    {
+      name: 'gps-speedometer-settings',
+      partialize: (state) => {
+        const { showTileDownload, settingsOpen, ...persisted } = state
+        return persisted
+      }
+    }
   )
 )

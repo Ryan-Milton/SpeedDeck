@@ -63,7 +63,7 @@ export function TileDownloadOverlay(): React.JSX.Element {
   }, [])
 
   useEffect(() => {
-    window.api.estimateTileDownload(bbox, 0, maxZoom).then(setEstimate).catch(() => {})
+    window.api.estimateTileDownload(bbox, 8, maxZoom).then(setEstimate).catch(() => {})
   }, [bbox, maxZoom])
 
   // Initialize map
@@ -180,7 +180,7 @@ export function TileDownloadOverlay(): React.JSX.Element {
 
   const handleDownload = useCallback(async () => {
     setDownloading(true)
-    await window.api.startTileDownload(bbox, 0, maxZoom)
+    await window.api.startTileDownload(bbox, 8, maxZoom)
   }, [bbox, maxZoom])
 
   const handleDone = useCallback(() => {

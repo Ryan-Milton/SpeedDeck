@@ -46,10 +46,10 @@ export function LiveMap(): React.JSX.Element {
       map.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'bottom-right')
 
       map.on('load', () => {
-        // Trail source (empty initially)
+        // Trail source — FeatureCollection of 2-point segments, each with a color property
         map.addSource('trail', {
           type: 'geojson',
-          data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } }
+          data: { type: 'FeatureCollection', features: [] }
         })
         map.addLayer({
           id: 'trail-outline',
@@ -61,7 +61,10 @@ export function LiveMap(): React.JSX.Element {
           id: 'trail-line',
           type: 'line',
           source: 'trail',
-          paint: { 'line-width': 3, 'line-color': '#22d3ee' }
+          paint: {
+            'line-width': 3,
+            'line-color': ['get', 'color']
+          }
         })
 
         mapReadyRef.current = true
@@ -115,11 +118,21 @@ export function LiveMap(): React.JSX.Element {
 
         const src = map.getSource('trail') as maplibregl.GeoJSONSource | undefined
         if (src && trailCoordsRef.current.length >= 2) {
-          src.setData({
-            type: 'Feature',
-            properties: {},
-            geometry: { type: 'LineString', coordinates: trailCoordsRef.current }
-          })
+          // Build colored segments: max speed for color normalization
+          const maxSpd = Math.max(...trailSpeedsRef.current, 0.1)
+          const features: GeoJSON.Feature[] = []
+          for (let i = 1; i < trailCoordsRef.current.length; i++) {
+            const ratio = Math.min(trailSpeedsRef.current[i] / maxSpd, 1)
+            features.push({
+              type: 'Feature',
+              properties: { color: speedToColor(ratio) },
+              geometry: {
+                type: 'LineString',
+                coordinates: [trailCoordsRef.current[i - 1], trailCoordsRef.current[i]]
+              }
+            })
+          }
+          src.setData({ type: 'FeatureCollection', features })
         }
       } else if (prevState.tripStatus === 'recording' && tripStatus !== 'recording') {
         // Trip just stopped — clear trail
@@ -127,11 +140,7 @@ export function LiveMap(): React.JSX.Element {
         trailSpeedsRef.current = []
         const src = map.getSource('trail') as maplibregl.GeoJSONSource | undefined
         if (src) {
-          src.setData({
-            type: 'Feature',
-            properties: {},
-            geometry: { type: 'LineString', coordinates: [] }
-          })
+          src.setData({ type: 'FeatureCollection', features: [] })
         }
       }
     })

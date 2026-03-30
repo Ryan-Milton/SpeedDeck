@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react'
-import { cn } from '../../lib/utils'
+import { useState, useEffect, useRef } from 'react'
 
 export function TileDownloadProgress({
   onDone,
@@ -9,21 +8,26 @@ export function TileDownloadProgress({
   onCancel: () => void
 }): React.JSX.Element {
   const [progress, setProgress] = useState({ downloaded: 0, total: 0, percent: 0 })
+  const doneRef = useRef(false)
+
+  const fireDone = (): void => {
+    if (doneRef.current) return
+    doneRef.current = true
+    setTimeout(onDone, 500)
+  }
 
   useEffect(() => {
     const unsub = window.api.onTileDownloadProgress((p) => {
       setProgress(p)
-      if (p.percent >= 100) {
-        setTimeout(onDone, 500)
-      }
+      if (p.percent >= 100) fireDone()
     })
-    // Also poll in case events are missed
+    // Poll as backup in case IPC events are missed
     const interval = setInterval(async () => {
       const p = await window.api.getTileDownloadProgress()
       setProgress(p)
       if (p.percent >= 100) {
         clearInterval(interval)
-        setTimeout(onDone, 500)
+        fireDone()
       }
     }, 1000)
     return (): void => {

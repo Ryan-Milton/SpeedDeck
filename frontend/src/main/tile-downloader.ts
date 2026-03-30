@@ -129,6 +129,9 @@ export async function startDownload(
   minZoom: number,
   maxZoom: number
 ): Promise<boolean> {
+  if (abortController) {
+    return false // Already in progress
+  }
   const cacheDir = getCacheDir()
   abortController = new AbortController()
   const { signal } = abortController
