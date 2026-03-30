@@ -13,6 +13,8 @@ export function ControlBar(): React.JSX.Element {
   const setSpeedUnit = useSettingsStore((s) => s.setSpeedUnit)
   const showGraph = useSettingsStore((s) => s.showGraph)
   const setShowGraph = useSettingsStore((s) => s.setShowGraph)
+  const viewMode = useSettingsStore((s) => s.viewMode)
+  const toggleViewMode = useSettingsStore((s) => s.toggleViewMode)
 
   const wsRef = useRef<GpsWebSocketClient | null>(null)
 
@@ -55,18 +57,31 @@ export function ControlBar(): React.JSX.Element {
         ))}
       </div>
 
-      {/* Center: Graph toggle */}
-      <button
-        onClick={() => setShowGraph(!showGraph)}
-        className={cn(
-          'px-4 h-10 rounded-lg text-sm font-semibold tracking-[1px] border transition-colors',
-          showGraph
-            ? 'bg-cyan-900/50 text-cyan-400 border-cyan-400/30'
-            : 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:text-zinc-100'
-        )}
-      >
-        GRAPH
-      </button>
+      {/* Center: View + Graph toggles */}
+      <div className="flex gap-2">
+        <button
+          onClick={toggleViewMode}
+          className={cn(
+            'px-4 h-10 rounded-lg text-sm font-semibold tracking-[1px] border transition-colors',
+            viewMode === 'map'
+              ? 'bg-cyan-900/50 text-cyan-400 border-cyan-400/30'
+              : 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:text-zinc-100'
+          )}
+        >
+          {viewMode === 'hud' ? 'MAP' : 'HUD'}
+        </button>
+        <button
+          onClick={() => setShowGraph(!showGraph)}
+          className={cn(
+            'px-4 h-10 rounded-lg text-sm font-semibold tracking-[1px] border transition-colors',
+            showGraph
+              ? 'bg-cyan-900/50 text-cyan-400 border-cyan-400/30'
+              : 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:text-zinc-100'
+          )}
+        >
+          GRAPH
+        </button>
+      </div>
 
       {/* Right: Trip button */}
       <button

@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { SpeedUnit, AltitudeUnit } from '../types/gps'
 
+type ViewMode = 'hud' | 'map'
+
 interface SettingsState {
   speedUnit: SpeedUnit
   altitudeUnit: AltitudeUnit
@@ -9,6 +11,9 @@ interface SettingsState {
   speedWarningThreshold: number // stored in current unit
   showGraph: boolean
   settingsOpen: boolean
+  viewMode: ViewMode
+  tilesAvailable: boolean
+  showTileDownload: boolean
 
   setSpeedUnit: (unit: SpeedUnit) => void
   cycleSpeedUnit: () => void
@@ -16,6 +21,10 @@ interface SettingsState {
   setSpeedWarning: (enabled: boolean, threshold?: number) => void
   setShowGraph: (show: boolean) => void
   toggleSettings: () => void
+  setViewMode: (mode: ViewMode) => void
+  toggleViewMode: () => void
+  setTilesAvailable: (available: boolean) => void
+  setShowTileDownload: (show: boolean) => void
 }
 
 const UNIT_CYCLE: SpeedUnit[] = ['mph', 'kmh', 'knots']
@@ -29,6 +38,9 @@ export const useSettingsStore = create<SettingsState>()(
       speedWarningThreshold: 80,
       showGraph: false,
       settingsOpen: false,
+      viewMode: 'hud',
+      tilesAvailable: false,
+      showTileDownload: false,
 
       setSpeedUnit: (unit): void => set({ speedUnit: unit }),
 
@@ -48,8 +60,23 @@ export const useSettingsStore = create<SettingsState>()(
 
       setShowGraph: (show): void => set({ showGraph: show }),
 
-      toggleSettings: (): void => set((s) => ({ settingsOpen: !s.settingsOpen }))
+      toggleSettings: (): void => set((s) => ({ settingsOpen: !s.settingsOpen })),
+
+      setViewMode: (mode): void => set({ viewMode: mode }),
+
+      toggleViewMode: (): void =>
+        set((s) => ({ viewMode: s.viewMode === 'hud' ? 'map' : 'hud' })),
+
+      setTilesAvailable: (available): void => set({ tilesAvailable: available }),
+
+      setShowTileDownload: (show): void => set({ showTileDownload: show })
     }),
-    { name: 'gps-speedometer-settings' }
+    {
+      name: 'gps-speedometer-settings',
+      partialize: (state) => {
+        const { showTileDownload, settingsOpen, ...persisted } = state
+        return persisted
+      }
+    }
   )
 )

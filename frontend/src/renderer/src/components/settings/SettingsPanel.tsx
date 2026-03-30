@@ -3,6 +3,7 @@ import { cn, speedUnitLabel, altitudeUnitLabel } from '../../lib/utils'
 import { X } from 'lucide-react'
 import type { SpeedUnit, AltitudeUnit } from '../../types/gps'
 import { TripListSection } from './TripListSection'
+import { useEffect, useState } from 'react'
 
 const SPEED_UNITS: SpeedUnit[] = ['mph', 'kmh', 'knots']
 const ALT_UNITS: AltitudeUnit[] = ['ft', 'm']
@@ -105,6 +106,9 @@ export function SettingsPanel(): React.JSX.Element {
         {/* Trips */}
         <TripListSection />
 
+        {/* Map tiles */}
+        <MapTilesSection />
+
         {/* Info */}
         <Section label="ABOUT">
           <div className="text-sm text-zinc-300 space-y-1">
@@ -113,6 +117,51 @@ export function SettingsPanel(): React.JSX.Element {
             <p className="text-zinc-400">Built for Steam Deck</p>
           </div>
         </Section>
+      </div>
+    </div>
+  )
+}
+
+function MapTilesSection(): React.JSX.Element {
+  const setShowTileDownload = useSettingsStore((s) => s.setShowTileDownload)
+  const [tilesExist, setTilesExist] = useState(false)
+  const [cacheSize, setCacheSize] = useState(0)
+
+  useEffect(() => {
+    window.api.checkTilesExist().then(setTilesExist).catch(() => {})
+    window.api.getCacheSize().then(setCacheSize).catch(() => {})
+  }, [])
+
+  const handleDelete = async (): Promise<void> => {
+    await window.api.deleteCachedTiles()
+    setTilesExist(false)
+    setCacheSize(0)
+    useSettingsStore.getState().setTilesAvailable(false)
+  }
+
+  const cacheMB = (cacheSize / 1024 / 1024).toFixed(1)
+
+  return (
+    <div className="space-y-3">
+      <span className="text-xs font-semibold tracking-[2px] uppercase text-zinc-400">MAP TILES</span>
+      <div className="flex items-center gap-4">
+        <span className="text-sm text-zinc-300">
+          {tilesExist ? `Downloaded (${cacheMB} MB)` : 'Not downloaded'}
+        </span>
+        <button
+          onClick={() => setShowTileDownload(true)}
+          className="px-4 h-10 rounded-lg text-sm font-semibold tracking-[1px] border bg-zinc-800 text-zinc-300 border-zinc-700 hover:text-cyan-400 hover:border-cyan-400/30 transition-colors"
+        >
+          {tilesExist ? 'UPDATE TILES' : 'DOWNLOAD TILES'}
+        </button>
+        {tilesExist && (
+          <button
+            onClick={handleDelete}
+            className="px-4 h-10 rounded-lg text-sm font-semibold tracking-[1px] border bg-zinc-800 text-red-400 border-zinc-700 hover:border-red-800 transition-colors"
+          >
+            DELETE
+          </button>
+        )}
       </div>
     </div>
   )

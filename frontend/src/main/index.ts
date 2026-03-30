@@ -4,6 +4,11 @@ import { pathToFileURL } from 'url'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { PythonManager } from './python-manager'
 import { writeFile } from 'fs/promises'
+import { existsSync } from 'fs'
+import {
+  tilesExist, estimateDownload, startDownload, cancelDownload,
+  getDownloadProgress, deleteCachedTiles, getCacheSize, getCacheDir
+} from './tile-downloader'
 
 // SteamOS/Gamescope requires --no-sandbox for non-Steam Electron apps
 if (process.platform === 'linux') {
@@ -55,6 +60,22 @@ app.whenReady().then(async () => {
     return net.fetch(pathToFileURL(resourcePath).toString())
   })
 
+  // Serve cached map tiles from userData
+  protocol.handle('tile-cache', (request) => {
+    const url = new URL(request.url)
+    const cacheDir = getCacheDir()
+    const tilePath = join(cacheDir, url.pathname)
+    // Prevent path traversal — resolved path must be inside the cache dir
+    const resolved = require('path').resolve(tilePath)
+    if (!resolved.startsWith(require('path').resolve(cacheDir))) {
+      return new Response('Forbidden', { status: 403 })
+    }
+    if (!existsSync(tilePath)) {
+      return new Response('Not found', { status: 404 })
+    }
+    return net.fetch(pathToFileURL(tilePath).toString())
+  })
+
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
@@ -98,6 +119,28 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('save-file', async (_event, filePath: string, content: string) => {
     await writeFile(filePath, content, 'utf-8')
+  })
+
+  // Tile management IPC
+  ipcMain.handle('check-tiles-exist', () => tilesExist())
+
+  ipcMain.handle('get-cache-size', () => getCacheSize())
+
+  ipcMain.handle('estimate-tile-download', (_event, bbox: { minLon: number; minLat: number; maxLon: number; maxLat: number }, minZoom: number, maxZoom: number) => {
+    return estimateDownload(bbox, minZoom, maxZoom)
+  })
+
+  ipcMain.handle('start-tile-download', async (_event, bbox: { minLon: number; minLat: number; maxLon: number; maxLat: number }, minZoom: number, maxZoom: number) => {
+    return startDownload(bbox, minZoom, maxZoom)
+  })
+
+  ipcMain.handle('cancel-tile-download', () => cancelDownload())
+
+  ipcMain.handle('get-tile-download-progress', () => getDownloadProgress())
+
+  ipcMain.handle('delete-cached-tiles', () => {
+    deleteCachedTiles()
+    return true
   })
 
   createWindow()
