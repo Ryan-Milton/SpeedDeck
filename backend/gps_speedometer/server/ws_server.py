@@ -25,6 +25,11 @@ class WebSocketServer:
         self._server: Server | None = None
         self._state_queue: asyncio.Queue[GPSState] = asyncio.Queue(maxsize=50)
         self._command_handler: Callable[[dict], asyncio.Future] | None = None
+        self._last_state_json: str | None = None
+
+    @property
+    def last_state_json(self) -> str | None:
+        return self._last_state_json
 
     def set_command_handler(self, handler: Callable[[dict], asyncio.Future]) -> None:
         self._command_handler = handler
@@ -75,6 +80,13 @@ class WebSocketServer:
         self._clients.add(ws)
         remote = ws.remote_address
         log.info("Client connected: %s", remote)
+        # Send last known state immediately so new clients don't wait
+        if self._last_state_json:
+            try:
+                await ws.send(self._last_state_json)
+            except websockets.ConnectionClosed:
+                self._clients.discard(ws)
+                return
         try:
             async for raw in ws:
                 cmd = parse_command(raw)
@@ -92,4 +104,5 @@ class WebSocketServer:
         while True:
             state = await self._state_queue.get()
             msg = state.to_json()
+            self._last_state_json = msg
             await self.send_to_all(msg)

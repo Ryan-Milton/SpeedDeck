@@ -63,6 +63,11 @@ export function formatDuration(seconds: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
+export function lerpAngle(a: number, b: number, t: number): number {
+  const diff = ((b - a + 540) % 360) - 180
+  return ((a + diff * t) + 360) % 360
+}
+
 const EARTH_RADIUS_M = 6_371_000
 
 export function haversineDistance(
@@ -75,6 +80,18 @@ export function haversineDistance(
     Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2
   return EARTH_RADIUS_M * 2 * Math.asin(Math.sqrt(a))
+}
+
+export function distance3d(
+  lat1: number, lon1: number, alt1: number | null,
+  lat2: number, lon2: number, alt2: number | null
+): number {
+  const horiz = haversineDistance(lat1, lon1, lat2, lon2)
+  if (alt1 != null && alt2 != null) {
+    const dalt = alt2 - alt1
+    return Math.sqrt(horiz ** 2 + dalt ** 2)
+  }
+  return horiz
 }
 
 export function cardinalDirection(heading: number): string {

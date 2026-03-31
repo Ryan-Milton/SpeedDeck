@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { SpeedUnit, AltitudeUnit } from '../types/gps'
 
-type ViewMode = 'hud' | 'map'
+type ViewMode = 'dashboard' | 'map' | 'trips'
 
 interface SettingsState {
   speedUnit: SpeedUnit
@@ -22,7 +22,6 @@ interface SettingsState {
   setShowGraph: (show: boolean) => void
   toggleSettings: () => void
   setViewMode: (mode: ViewMode) => void
-  toggleViewMode: () => void
   setTilesAvailable: (available: boolean) => void
   setShowTileDownload: (show: boolean) => void
 }
@@ -38,7 +37,7 @@ export const useSettingsStore = create<SettingsState>()(
       speedWarningThreshold: 80,
       showGraph: false,
       settingsOpen: false,
-      viewMode: 'hud',
+      viewMode: 'dashboard',
       tilesAvailable: false,
       showTileDownload: false,
 
@@ -64,9 +63,6 @@ export const useSettingsStore = create<SettingsState>()(
 
       setViewMode: (mode): void => set({ viewMode: mode }),
 
-      toggleViewMode: (): void =>
-        set((s) => ({ viewMode: s.viewMode === 'hud' ? 'map' : 'hud' })),
-
       setTilesAvailable: (available): void => set({ tilesAvailable: available }),
 
       setShowTileDownload: (show): void => set({ showTileDownload: show })
@@ -76,6 +72,14 @@ export const useSettingsStore = create<SettingsState>()(
       partialize: (state) => {
         const { showTileDownload, settingsOpen, ...persisted } = state
         return persisted
+      },
+      // Migrate old 'hud'/'map' viewMode to new values
+      merge: (persisted, current) => {
+        const merged = { ...current, ...(persisted as Partial<SettingsState>) }
+        if (merged.viewMode !== 'dashboard' && merged.viewMode !== 'map' && merged.viewMode !== 'trips') {
+          merged.viewMode = 'dashboard'
+        }
+        return merged
       }
     }
   )

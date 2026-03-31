@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 
 from ..server.protocol import GPSFix, GPSState
-from ..utils.geo import haversine_distance
+from ..utils.geo import distance_3d
 
 
 class DataProcessor:
@@ -13,10 +13,12 @@ class DataProcessor:
 
     def __init__(self, smoothing_alpha: float = 0.3, min_speed_threshold: float = 0.56):
         self._alpha = smoothing_alpha
+        self._alt_alpha = 0.2  # gentler smoothing for altitude
         self._min_speed = min_speed_threshold
 
         # Session stats
         self._smoothed_speed: float = 0.0
+        self._smoothed_altitude: float | None = None
         self._max_speed: float = 0.0
         self._speed_sum: float = 0.0
         self._speed_count: int = 0
@@ -24,6 +26,7 @@ class DataProcessor:
         # Previous fix for distance calculation
         self._prev_lat: float | None = None
         self._prev_lon: float | None = None
+        self._prev_alt: float | None = None
 
         # Trip state (managed externally by recorder, read here)
         self.trip_status: str = "idle"
@@ -58,6 +61,27 @@ class DataProcessor:
 
         avg_speed = self._speed_sum / max(self._speed_count, 1)
 
+        # EMA altitude smoothing
+        if fix.altitude is not None:
+            if self._smoothed_altitude is None:
+                self._smoothed_altitude = fix.altitude
+            else:
+                self._smoothed_altitude = (
+                    self._alt_alpha * fix.altitude
+                    + (1 - self._alt_alpha) * self._smoothed_altitude
+                )
+            fix = GPSFix(
+                timestamp=fix.timestamp,
+                latitude=fix.latitude,
+                longitude=fix.longitude,
+                altitude=self._smoothed_altitude,
+                speed=fix.speed,
+                heading=fix.heading,
+                satellites=fix.satellites,
+                fix_quality=fix.fix_quality,
+                hdop=fix.hdop,
+            )
+
         # Trip accumulation
         if self.trip_status == "recording":
             self._accumulate_trip(fix)
@@ -65,6 +89,7 @@ class DataProcessor:
         # Update previous position
         self._prev_lat = fix.latitude
         self._prev_lon = fix.longitude
+        self._prev_alt = fix.altitude
 
         return GPSState(
             fix=fix,
@@ -86,7 +111,10 @@ class DataProcessor:
             and self._prev_lon is not None
             and fix.speed >= self._min_speed
         ):
-            d = haversine_distance(self._prev_lat, self._prev_lon, fix.latitude, fix.longitude)
+            d = distance_3d(
+                self._prev_lat, self._prev_lon, self._prev_alt,
+                fix.latitude, fix.longitude, fix.altitude,
+            )
             self.trip_distance += d
 
         # Trip max speed

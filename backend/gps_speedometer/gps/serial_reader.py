@@ -16,9 +16,10 @@ class SerialReader:
     """Reads raw NMEA lines from a serial port in a background thread."""
 
     def __init__(self, port: str, baud: int, sentence_queue: queue.Queue[str],
-                 update_hz: int = 10):
+                 update_hz: int = 10, detect_port_fn=None):
         self.port = port
         self.baud = baud
+        self._detect_port_fn = detect_port_fn
         self.queue = sentence_queue
         self._update_hz = update_hz
         self._thread: threading.Thread | None = None
@@ -78,6 +79,13 @@ class SerialReader:
             except (serial.SerialException, OSError) as e:
                 self._connected = False
                 if not self._stop_event.is_set():
+                    # Re-detect port in case the device has appeared on a different path
+                    if self._detect_port_fn:
+                        detected = self._detect_port_fn()
+                        if detected != self.port:
+                            log.info("Re-detected serial port: %s (was %s)", detected, self.port)
+                            self.port = detected
+                            backoff = 1.0  # reset backoff on new port
                     log.warning("Serial error on %s: %s — retrying in %.1fs", self.port, e, backoff)
                     self._stop_event.wait(backoff)
                     backoff = min(backoff * 2, 10.0)

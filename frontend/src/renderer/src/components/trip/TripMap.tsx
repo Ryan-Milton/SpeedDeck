@@ -2,7 +2,8 @@ import { useEffect, useRef } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { useTripViewerStore } from '../../stores/trip-viewer-store'
-import { haversineDistance } from '../../lib/utils'
+import { usePlaybackStore } from '../../stores/playback-store'
+import { distance3d } from '../../lib/utils'
 import { resolveMapStyle, speedToColor } from '../../lib/map-style'
 import type { Trackpoint } from '../../types/gps'
 
@@ -11,8 +12,10 @@ const MAX_GRADIENT_STOPS = 200
 export function TripMap(): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
+  const mapReadyRef = useRef(false)
   const trackpoints = useTripViewerStore((s) => s.trackpoints)
 
+  // Initialize map
   useEffect(() => {
     if (!containerRef.current || trackpoints.length < 2) return
 
@@ -42,6 +45,37 @@ export function TripMap(): React.JSX.Element {
       map.on('load', () => {
         addTrackLayer(map, trackpoints)
         addMarkers(map, trackpoints)
+
+        // Playback dot (hidden initially)
+        map.addSource('playback-dot', {
+          type: 'geojson',
+          data: { type: 'Feature', geometry: { type: 'Point', coordinates: [0, 0] }, properties: {} }
+        })
+        map.addLayer({
+          id: 'playback-dot-glow',
+          type: 'circle',
+          source: 'playback-dot',
+          paint: {
+            'circle-radius': 12,
+            'circle-color': '#0A84FF',
+            'circle-opacity': 0,
+            'circle-blur': 0.5
+          }
+        })
+        map.addLayer({
+          id: 'playback-dot-circle',
+          type: 'circle',
+          source: 'playback-dot',
+          paint: {
+            'circle-radius': 7,
+            'circle-color': '#0A84FF',
+            'circle-stroke-width': 3,
+            'circle-stroke-color': '#FFFFFF',
+            'circle-opacity': 0
+          }
+        })
+
+        mapReadyRef.current = true
       })
 
       mapRef.current = map
@@ -51,11 +85,60 @@ export function TripMap(): React.JSX.Element {
 
     return (): void => {
       cancelled = true
+      mapReadyRef.current = false
       if (mapRef.current) {
         mapRef.current.remove()
         mapRef.current = null
       }
     }
+  }, [trackpoints])
+
+  // Subscribe to playback store for camera follow + dot
+  useEffect(() => {
+    if (trackpoints.length < 2) return
+
+    const unsub = usePlaybackStore.subscribe((state, prev) => {
+      const map = mapRef.current
+      if (!map || !mapReadyRef.current) return
+
+      // Show dot when playback starts or has a position
+      if (state.position && !prev.position) {
+        map.setPaintProperty('playback-dot-circle', 'circle-opacity', 1)
+        map.setPaintProperty('playback-dot-glow', 'circle-opacity', 0.3)
+      }
+
+      // Hide dot and return to overview on stop
+      if (!state.position && prev.position) {
+        map.setPaintProperty('playback-dot-circle', 'circle-opacity', 0)
+        map.setPaintProperty('playback-dot-glow', 'circle-opacity', 0)
+        map.fitBounds(
+          computeBounds(trackpoints) as maplibregl.LngLatBoundsLike,
+          { padding: 80, pitch: 40, bearing: computeInitialBearing(trackpoints), duration: 800 }
+        )
+        return
+      }
+
+      if (!state.position) return
+
+      // Update dot position
+      const src = map.getSource('playback-dot') as maplibregl.GeoJSONSource | undefined
+      src?.setData({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [state.position.lng, state.position.lat] },
+        properties: {}
+      })
+
+      // Camera follow: heading-up, pitched, zoomed in (instant — rAF provides smoothness)
+      map.jumpTo({
+        center: [state.position.lng, state.position.lat],
+        bearing: state.heading,
+        pitch: 50,
+        zoom: 16,
+        padding: { top: 200, bottom: 0, left: 0, right: 0 }
+      })
+    })
+
+    return unsub
   }, [trackpoints])
 
   return (
@@ -98,9 +181,9 @@ function addTrackLayer(map: maplibregl.Map, trackpoints: Trackpoint[]): void {
   const distances: number[] = [0]
   let totalDist = 0
   for (let i = 1; i < trackpoints.length; i++) {
-    totalDist += haversineDistance(
-      trackpoints[i - 1].latitude, trackpoints[i - 1].longitude,
-      trackpoints[i].latitude, trackpoints[i].longitude
+    totalDist += distance3d(
+      trackpoints[i - 1].latitude, trackpoints[i - 1].longitude, trackpoints[i - 1].altitude,
+      trackpoints[i].latitude, trackpoints[i].longitude, trackpoints[i].altitude
     )
     distances.push(totalDist)
   }
@@ -176,7 +259,7 @@ function addSimpleLine(map: maplibregl.Map, coordinates: number[][]): void {
     id: 'track-line',
     type: 'line',
     source: 'track',
-    paint: { 'line-width': 4, 'line-color': '#22d3ee' }
+    paint: { 'line-width': 4, 'line-color': '#0A84FF' }
   })
 }
 
@@ -185,13 +268,13 @@ function addMarkers(map: maplibregl.Map, trackpoints: Trackpoint[]): void {
   const last = trackpoints[trackpoints.length - 1]
 
   const startEl = document.createElement('div')
-  startEl.style.cssText = 'width:16px;height:16px;border-radius:50%;background:#22c55e;border:2px solid #fff;box-shadow:0 0 8px rgba(34,197,94,0.6);'
+  startEl.style.cssText = 'width:16px;height:16px;border-radius:50%;background:#30D158;border:2px solid #fff;box-shadow:0 2px 6px rgba(48,209,88,0.4);'
   new maplibregl.Marker({ element: startEl })
     .setLngLat([first.longitude, first.latitude])
     .addTo(map)
 
   const endEl = document.createElement('div')
-  endEl.style.cssText = 'width:16px;height:16px;border-radius:50%;background:#ef4444;border:2px solid #fff;box-shadow:0 0 8px rgba(239,68,68,0.6);'
+  endEl.style.cssText = 'width:16px;height:16px;border-radius:50%;background:#FF453A;border:2px solid #fff;box-shadow:0 2px 6px rgba(255,69,58,0.4);'
   new maplibregl.Marker({ element: endEl })
     .setLngLat([last.longitude, last.latitude])
     .addTo(map)

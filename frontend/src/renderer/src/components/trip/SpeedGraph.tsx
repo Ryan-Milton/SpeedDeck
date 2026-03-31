@@ -22,14 +22,14 @@ export function SpeedGraph(): React.JSX.Element {
           <YAxis
             domain={[0, maxY]}
             width={40}
-            tick={{ fill: '#52525b', fontSize: 11 }}
+            tick={{ fill: '#48484A', fontSize: 11 }}
             axisLine={false}
             tickLine={false}
           />
           <Line
             type="monotone"
             dataKey="speed"
-            stroke="#22d3ee"
+            stroke="#0A84FF"
             strokeWidth={2}
             dot={false}
             isAnimationActive={false}
@@ -37,8 +37,8 @@ export function SpeedGraph(): React.JSX.Element {
         </LineChart>
       </ResponsiveContainer>
       <div className="text-center -mt-1">
-        <span className="text-[11px] text-zinc-400 tracking-[1px]">
-          SPEED ({speedUnitLabel(unit)}) — LAST 10 MIN
+        <span className="text-[11px] text-text-secondary">
+          Speed ({speedUnitLabel(unit)}) — Last 10 min
         </span>
       </div>
     </div>

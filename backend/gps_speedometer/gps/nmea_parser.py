@@ -45,6 +45,7 @@ class NmeaParser:
         self._fix_quality: int = 0
         self._hdop: float | None = None
         self._speed_mps: float = 0.0
+        self._vtg_speed: float | None = None
         self._heading: float = 0.0
         self._timestamp: datetime = datetime.now(timezone.utc)
         self._has_rmc = False
@@ -73,7 +74,9 @@ class NmeaParser:
         # Emit a fix after every RMC (it carries speed + position)
         if self._has_rmc:
             self._has_rmc = False
-            return self._build_fix()
+            fix = self._build_fix()
+            self._vtg_speed = None  # Reset for next cycle
+            return fix
 
         return None
 
@@ -100,7 +103,11 @@ class NmeaParser:
             self._longitude = msg.longitude
         spd = _to_float(msg.spd_over_grnd)
         if spd is not None:
-            self._speed_mps = spd * KNOTS_TO_MPS
+            # Prefer VTG ground speed when available (more reliable on some chipsets)
+            if self._vtg_speed is not None:
+                self._speed_mps = self._vtg_speed
+            else:
+                self._speed_mps = spd * KNOTS_TO_MPS
         course = _to_float(msg.true_course)
         if course is not None:
             self._heading = course
@@ -108,11 +115,11 @@ class NmeaParser:
             self._update_time(msg.timestamp)
 
     def _handle_vtg(self, msg: pynmea2.types.talker.VTG) -> None:
-        # VTG can provide a more accurate speed; use it if available
+        # VTG provides reliable ground speed; store for RMC to pick up
         try:
             spd_kmh = _to_float(getattr(msg, "spd_over_grnd_kmph", None))
             if spd_kmh is not None:
-                self._speed_mps = spd_kmh / 3.6
+                self._vtg_speed = spd_kmh / 3.6
         except (ValueError, TypeError):
             pass
 

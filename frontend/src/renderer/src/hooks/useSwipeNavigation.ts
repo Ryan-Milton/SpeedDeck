@@ -3,7 +3,8 @@ import { useSettingsStore } from '../stores/settings-store'
 
 const SWIPE_THRESHOLD = 80 // px
 const SWIPE_MAX_TIME = 400 // ms
-const EDGE_ZONE = 40 // px from screen edge
+
+const TAB_ORDER = ['dashboard', 'map', 'trips'] as const
 
 export function useSwipeNavigation(): void {
   const touchRef = useRef<{ x: number; y: number; t: number } | null>(null)
@@ -32,13 +33,14 @@ export function useSwipeNavigation(): void {
       if (Math.abs(dy) > Math.abs(dx) * 0.7) return // too vertical
 
       const viewMode = useSettingsStore.getState().viewMode
+      const idx = TAB_ORDER.indexOf(viewMode)
 
-      if (viewMode === 'hud' && dx < 0) {
-        // Swipe left on HUD → switch to map
-        useSettingsStore.getState().setViewMode('map')
-      } else if (viewMode === 'map' && dx > 0 && start.x < EDGE_ZONE) {
-        // Swipe right from left edge on map → switch to HUD
-        useSettingsStore.getState().setViewMode('hud')
+      if (dx < 0 && idx < TAB_ORDER.length - 1) {
+        // Swipe left → next tab
+        useSettingsStore.getState().setViewMode(TAB_ORDER[idx + 1])
+      } else if (dx > 0 && idx > 0) {
+        // Swipe right → previous tab
+        useSettingsStore.getState().setViewMode(TAB_ORDER[idx - 1])
       }
     }
 

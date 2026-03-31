@@ -8,7 +8,7 @@ const DARK_FALLBACK: maplibregl.StyleSpecification = {
   name: 'Dark',
   sources: {},
   layers: [
-    { id: 'background', type: 'background', paint: { 'background-color': '#111114' } }
+    { id: 'background', type: 'background', paint: { 'background-color': '#1C1C1E' } }
   ]
 }
 
@@ -22,7 +22,7 @@ const OFFLINE_STYLE: maplibregl.StyleSpecification = {
     }
   },
   layers: [
-    { id: 'background', type: 'background', paint: { 'background-color': '#111114' } },
+    { id: 'background', type: 'background', paint: { 'background-color': '#1C1C1E' } },
     { id: 'water', type: 'fill', source: 'openmaptiles', 'source-layer': 'water', paint: { 'fill-color': '#1a1a2e' } },
     { id: 'landcover', type: 'fill', source: 'openmaptiles', 'source-layer': 'landcover', paint: { 'fill-color': '#1a1a1f' } },
     { id: 'landuse', type: 'fill', source: 'openmaptiles', 'source-layer': 'landuse', paint: { 'fill-color': '#18181b', 'fill-opacity': 0.5 } },
@@ -54,7 +54,7 @@ const CACHED_TILE_STYLE: maplibregl.StyleSpecification = {
     }
   },
   layers: [
-    { id: 'background', type: 'background', paint: { 'background-color': '#111114' } },
+    { id: 'background', type: 'background', paint: { 'background-color': '#1C1C1E' } },
     { id: 'water', type: 'fill', source: 'carto', 'source-layer': 'water', paint: { 'fill-color': '#1a1a2e' } },
     { id: 'landcover', type: 'fill', source: 'carto', 'source-layer': 'landcover', paint: { 'fill-color': '#1a1a1f' } },
     { id: 'landuse', type: 'fill', source: 'carto', 'source-layer': 'landuse', paint: { 'fill-color': '#18181b', 'fill-opacity': 0.5 } },
@@ -95,6 +95,18 @@ export async function resolveMapStyle(): Promise<string | maplibregl.StyleSpecif
 
   // 4. Fallback
   return DARK_FALLBACK
+}
+
+/**
+ * Check if online Carto style is reachable. Returns the style URL or null.
+ */
+export async function checkOnlineStyle(): Promise<string | null> {
+  if (!navigator.onLine) return null
+  try {
+    const resp = await fetch(CARTO_DARK_STYLE, { method: 'HEAD', signal: AbortSignal.timeout(3000) })
+    if (resp.ok) return CARTO_DARK_STYLE
+  } catch { /* not reachable */ }
+  return null
 }
 
 export function speedToColor(ratio: number): string {
