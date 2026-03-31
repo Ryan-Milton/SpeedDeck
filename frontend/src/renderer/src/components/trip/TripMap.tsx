@@ -131,7 +131,7 @@ export function TripMap(): React.JSX.Element {
       // Camera follow: heading-up, pitched, zoomed in (instant — rAF provides smoothness)
       map.jumpTo({
         center: [state.position.lng, state.position.lat],
-        bearing: -state.heading,
+        bearing: state.heading,
         pitch: 50,
         zoom: 16,
         padding: { top: 200, bottom: 0, left: 0, right: 0 }

@@ -15,23 +15,23 @@ export function TripElevationChart(): React.JSX.Element {
 
   const data = useMemo(() => {
     let cumDist = 0
-    return trackpoints
-      .filter((p) => p.altitude != null)
-      .map((p, i, arr) => {
-        if (i > 0) {
-          cumDist += distance3d(
-            arr[i - 1].latitude, arr[i - 1].longitude, arr[i - 1].altitude,
-            p.latitude, p.longitude, p.altitude
-          )
-        }
-        return {
-          dist: convertDistance(cumDist, speedUnit),
-          elev: convertAltitude(p.altitude!, altUnit)
-        }
-      })
+    return trackpoints.map((p, i) => {
+      if (i > 0) {
+        cumDist += distance3d(
+          trackpoints[i - 1].latitude, trackpoints[i - 1].longitude, trackpoints[i - 1].altitude,
+          p.latitude, p.longitude, p.altitude
+        )
+      }
+      return {
+        dist: convertDistance(cumDist, speedUnit),
+        elev: p.altitude != null ? convertAltitude(p.altitude, altUnit) : null
+      }
+    })
   }, [trackpoints, speedUnit, altUnit])
 
-  if (data.length < 2) {
+  const elevValues = data.filter((d) => d.elev != null).map((d) => d.elev as number)
+
+  if (elevValues.length < 2) {
     return (
       <div className="flex items-center justify-center text-text-tertiary text-sm" style={{ height: 140 }}>
         No elevation data
@@ -39,8 +39,8 @@ export function TripElevationChart(): React.JSX.Element {
     )
   }
 
-  const minElev = Math.floor(Math.min(...data.map((d) => d.elev)) - 10)
-  const maxElev = Math.ceil(Math.max(...data.map((d) => d.elev)) + 10)
+  const minElev = Math.floor(Math.min(...elevValues) - 10)
+  const maxElev = Math.ceil(Math.max(...elevValues) + 10)
 
   // Playback cursor position (converted to display units)
   const cursorDist = playbackPosition ? convertDistance(playbackCumDist, speedUnit) : null
