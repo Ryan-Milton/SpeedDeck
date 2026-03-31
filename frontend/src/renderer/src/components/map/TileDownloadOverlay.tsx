@@ -202,13 +202,13 @@ export function TileDownloadOverlay(): React.JSX.Element {
   const h = HANDLE_SIZE
 
   return (
-    <div className="fixed inset-0 bg-zinc-950 flex flex-col" style={{ zIndex: 65 }}>
+    <div className="fixed inset-0 bg-surface flex flex-col" style={{ zIndex: 65 }}>
       {/* Header */}
-      <div className="flex items-center justify-between h-14 px-6 border-b border-zinc-800 bg-zinc-950/90">
-        <span className="text-lg font-semibold tracking-[2px] text-zinc-300">DOWNLOAD MAP TILES</span>
+      <div className="flex items-center justify-between h-14 px-6 border-b border-separator bg-surface/90">
+        <span className="text-lg font-semibold tracking-wide text-text-primary">DOWNLOAD MAP TILES</span>
         <button
           onClick={() => setShowTileDownload(false)}
-          className="w-12 h-12 flex items-center justify-center text-zinc-400 hover:text-zinc-200"
+          className="w-12 h-12 flex items-center justify-center text-text-secondary hover:text-text-primary"
         >
           <X size={24} />
         </button>
@@ -253,28 +253,28 @@ export function TileDownloadOverlay(): React.JSX.Element {
 
         {/* Instructions */}
         <div className="absolute top-4 left-1/2 -translate-x-1/2 pointer-events-none">
-          <div className="rounded-lg px-4 py-2" style={{ background: 'rgba(9,9,11,0.8)', backdropFilter: 'blur(8px)' }}>
-            <span className="text-sm text-zinc-300">Drag the handles to select the area to download</span>
+          <div className="rounded-2xl px-4 py-2 bg-surface-card/90 backdrop-blur-xl">
+            <span className="text-sm text-text-primary">Drag the handles to select the area to download</span>
           </div>
         </div>
       </div>
 
       {/* Bottom panel */}
-      <div className="border-t border-zinc-800 bg-zinc-950/90 px-6 py-4 flex items-center gap-6">
+      <div className="border-t border-separator bg-surface/90 px-6 py-4 flex items-center gap-6">
         <div className="flex items-center gap-3">
-          <span className="text-xs font-semibold tracking-[1px] text-zinc-400">MAX ZOOM</span>
-          <input type="range" min={8} max={16} value={maxZoom} onChange={(e) => setMaxZoom(Number(e.target.value))} className="w-32 accent-cyan-400" />
-          <span className="font-mono text-lg text-zinc-200 tabular-nums" style={{ width: 28 }}>{maxZoom}</span>
+          <span className="text-xs font-semibold tracking-wide text-text-secondary">MAX ZOOM</span>
+          <input type="range" min={8} max={16} value={maxZoom} onChange={(e) => setMaxZoom(Number(e.target.value))} className="w-32 accent-[#0A84FF]" />
+          <span className="font-semibold text-lg text-text-primary tabular-nums" style={{ width: 28 }}>{maxZoom}</span>
         </div>
         <div className="flex items-baseline gap-2">
-          <span className="font-mono text-lg text-zinc-200 tabular-nums">{estimate.tileCount.toLocaleString()}</span>
-          <span className="text-xs text-zinc-400">tiles</span>
-          <span className="text-zinc-600 mx-1">/</span>
-          <span className="font-mono text-lg text-cyan-400 tabular-nums">~{estimate.estimatedSizeMB} MB</span>
+          <span className="font-semibold text-lg text-text-primary tabular-nums">{estimate.tileCount.toLocaleString()}</span>
+          <span className="text-xs text-text-secondary">tiles</span>
+          <span className="text-text-tertiary mx-1">/</span>
+          <span className="font-semibold text-lg text-accent tabular-nums">~{estimate.estimatedSizeMB} MB</span>
         </div>
         <div className="flex-1" />
-        <button onClick={handleDownload} className="px-8 h-12 rounded-lg text-sm font-semibold tracking-[1px] border bg-cyan-900/50 text-cyan-400 border-cyan-400/30 hover:bg-cyan-900/70 transition-colors">
-          DOWNLOAD
+        <button onClick={handleDownload} className="px-8 h-12 rounded-2xl text-sm font-semibold bg-accent text-white active:bg-accent/80 transition-colors">
+          Download
         </button>
       </div>
     </div>
@@ -315,12 +315,12 @@ function Handle({
       }}
     >
       <div
-        className="rounded-full bg-cyan-400 border-2 border-white"
+        className="rounded-full bg-accent border-2 border-white"
         style={{
           width: 14,
           height: 14,
           margin: (HANDLE_SIZE - 14) / 2,
-          boxShadow: '0 0 6px rgba(34,211,238,0.6)'
+          boxShadow: '0 0 6px rgba(10,132,255,0.6)'
         }}
       />
     </div>
@@ -353,13 +353,13 @@ function updateBboxLayer(map: maplibregl.Map, bbox: BBox): void {
       id: 'bbox-fill',
       type: 'fill',
       source: sourceId,
-      paint: { 'fill-color': '#22d3ee', 'fill-opacity': 0.08 }
+      paint: { 'fill-color': '#0A84FF', 'fill-opacity': 0.08 }
     })
     map.addLayer({
       id: 'bbox-outline',
       type: 'line',
       source: sourceId,
-      paint: { 'line-color': '#22d3ee', 'line-width': 2, 'line-opacity': 0.6 }
+      paint: { 'line-color': '#0A84FF', 'line-width': 2, 'line-opacity': 0.6 }
     })
   }
 }

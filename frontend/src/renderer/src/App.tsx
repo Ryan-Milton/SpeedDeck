@@ -1,22 +1,24 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
 import { useGpsConnection } from './hooks/useGpsConnection'
 import { useSwipeNavigation } from './hooks/useSwipeNavigation'
 import { useSettingsStore } from './stores/settings-store'
 import { useGpsStore } from './stores/gps-store'
+import { GpsWebSocketClient } from './lib/ws-client'
 import { StatusBar } from './components/shared/StatusBar'
-import { ControlBar } from './components/shared/ControlBar'
-import { SpeedDisplay } from './components/hud/SpeedDisplay'
-import { CompassWidget } from './components/hud/CompassWidget'
-import { AltitudePanel } from './components/hud/AltitudePanel'
-import { CoordinatesPanel } from './components/hud/CoordinatesPanel'
-import { SpeedStats } from './components/hud/SpeedStats'
-import { TripDistance } from './components/hud/TripDistance'
+import { TabBar } from './components/shared/TabBar'
+import { TripRecordingCard } from './components/shared/TripRecordingCard'
+import { SpeedCard } from './components/dashboard/SpeedCard'
+import { HeadingCard } from './components/dashboard/HeadingCard'
+import { AltitudeCard } from './components/dashboard/AltitudeCard'
+import { TripCard } from './components/dashboard/TripCard'
+import { SpeedStatsCard } from './components/dashboard/SpeedStatsCard'
 import { SpeedGraph } from './components/trip/SpeedGraph'
 import { SettingsPanel } from './components/settings/SettingsPanel'
 import { TripDetailView } from './components/trip/TripDetailView'
 import { TileDownloadOverlay } from './components/map/TileDownloadOverlay'
 import { LiveMap } from './components/map/LiveMap'
 import { MapOverlays } from './components/map/MapOverlays'
+import { TripsView } from './components/trips/TripsView'
 import { convertSpeed } from './lib/utils'
 import { cn } from './lib/utils'
 
@@ -31,8 +33,22 @@ export default function App(): React.JSX.Element {
   const speedUnit = useSettingsStore((s) => s.speedUnit)
   const smoothedSpeed = useGpsStore((s) => s.smoothedSpeed)
 
+  const tripStatus = useGpsStore((s) => s.tripStatus)
+
   const displaySpeed = Math.round(convertSpeed(smoothedSpeed, speedUnit))
   const isWarning = warningEnabled && displaySpeed > warningThreshold
+
+  // Trip command WS client
+  const tripWsRef = useRef<GpsWebSocketClient | null>(null)
+  useEffect(() => {
+    const client = new GpsWebSocketClient('ws://127.0.0.1:8765')
+    tripWsRef.current = client
+    client.connect()
+    return (): void => client.disconnect()
+  }, [])
+  const sendTripCommand = useCallback((action: string) => {
+    tripWsRef.current?.send({ type: 'command', action })
+  }, [])
 
   // Auto-prompt tile download when switching to map view with no tiles
   const promptedRef = useRef(false)
@@ -51,51 +67,69 @@ export default function App(): React.JSX.Element {
   return (
     <div
       className={cn(
-        'flex flex-col h-screen w-screen bg-zinc-950 text-zinc-100 select-none overflow-hidden',
-        isWarning && viewMode === 'hud' && 'ring-2 ring-red-500/50 shadow-[inset_0_0_60px_rgba(248,113,113,0.1)]'
+        'flex flex-col h-screen w-screen bg-surface text-text-primary select-none overflow-hidden',
+        isWarning && viewMode === 'dashboard' && 'ring-2 ring-danger/50'
       )}
     >
-      {/* Top status bar (HUD only — map has its own overlays) */}
-      {viewMode === 'hud' && <StatusBar />}
+      <StatusBar />
 
       {/* Main content area */}
-      {viewMode === 'hud' ? (
-        <div className="flex-1 relative flex items-center justify-center min-h-0 overflow-hidden">
-          <div className="absolute left-6 top-6">
-            <CompassWidget />
+      {viewMode === 'dashboard' && (
+        <div className="flex-1 flex min-h-0">
+          {/* Left panel — speed + stats */}
+          <div className="flex flex-col gap-3 p-3" style={{ width: 460 }}>
+            <SpeedCard />
+            <div className="grid grid-cols-2 gap-3 flex-1">
+              <HeadingCard />
+              <AltitudeCard />
+              <TripCard />
+              <SpeedStatsCard />
+            </div>
+            <TripRecordingCard />
           </div>
-          <div className="absolute right-6 top-6 flex flex-col gap-4">
-            <AltitudePanel />
-            <CoordinatesPanel />
-          </div>
-          <SpeedDisplay />
-          <div className="absolute left-6 bottom-4">
-            <TripDistance />
-          </div>
-          <div className="absolute right-6 bottom-4">
-            <SpeedStats />
+
+          {/* Right panel — map */}
+          <div className="flex-1 relative min-h-0">
+            <LiveMap />
+            <MapOverlays compact />
+            {/* Trip button overlay — top right */}
+            <div className="absolute top-4 right-4 pointer-events-auto">
+              <button
+                onClick={() => sendTripCommand(tripStatus === 'idle' ? 'trip_start' : 'trip_stop')}
+                className={cn(
+                  'h-10 px-5 rounded-full text-sm font-semibold shadow-sm transition-colors',
+                  tripStatus !== 'idle'
+                    ? 'bg-danger/90 text-white active:bg-danger'
+                    : 'bg-accent/90 text-white active:bg-accent'
+                )}
+              >
+                {tripStatus !== 'idle' ? 'Stop Trip' : 'Start Trip'}
+              </button>
+            </div>
           </div>
         </div>
-      ) : (
+      )}
+
+      {viewMode === 'map' && (
         <div className="flex-1 relative min-h-0">
           <LiveMap />
           <MapOverlays />
+          <div className="absolute bottom-4 left-4 right-4">
+            <TripRecordingCard />
+          </div>
         </div>
       )}
 
-      {/* Speed graph (available in both views) */}
-      {showGraph && <SpeedGraph />}
+      {viewMode === 'trips' && <TripsView />}
 
-      {/* Bottom control bar */}
-      <ControlBar />
+      {/* Speed graph (available in dashboard + map views) */}
+      {showGraph && viewMode !== 'trips' && <SpeedGraph />}
 
-      {/* Settings overlay */}
+      <TabBar />
+
+      {/* Overlays */}
       <SettingsPanel />
-
-      {/* Trip detail overlay */}
       <TripDetailView />
-
-      {/* Tile download overlay */}
       <TileDownloadOverlay />
     </div>
   )

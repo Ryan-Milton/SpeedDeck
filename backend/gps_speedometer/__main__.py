@@ -56,8 +56,8 @@ async def main() -> None:
         config.serial_port = args.serial_port
 
     # Auto-detect serial port if not specified and not using simulator
+    from .config import detect_serial_port
     if not config.serial_port and not config.use_simulator:
-        from .config import detect_serial_port
         config.serial_port = detect_serial_port()
 
     # Resolve data dir
@@ -82,7 +82,10 @@ async def main() -> None:
         gps_source = GpsSimulator(sentence_queue)
     else:
         log.info("Connecting to GPS on %s @ %d baud", config.serial_port, config.serial_baud)
-        gps_source = SerialReader(config.serial_port, config.serial_baud, sentence_queue)
+        gps_source = SerialReader(
+            config.serial_port, config.serial_baud, sentence_queue,
+            detect_port_fn=detect_serial_port,
+        )
 
     # Command handler
     async def handle_command(cmd: dict) -> str | None:
@@ -150,6 +153,9 @@ async def main() -> None:
         elif action == "reset_avg_speed":
             processor.reset_session_avg()
             return None
+
+        elif action == "get_status":
+            return ws_server.last_state_json
 
         return None
 

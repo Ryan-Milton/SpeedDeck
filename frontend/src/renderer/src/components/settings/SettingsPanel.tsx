@@ -2,7 +2,6 @@ import { useSettingsStore } from '../../stores/settings-store'
 import { cn, speedUnitLabel, altitudeUnitLabel } from '../../lib/utils'
 import { X } from 'lucide-react'
 import type { SpeedUnit, AltitudeUnit } from '../../types/gps'
-import { TripListSection } from './TripListSection'
 import { useEffect, useState } from 'react'
 
 const SPEED_UNITS: SpeedUnit[] = ['mph', 'kmh', 'knots']
@@ -18,17 +17,19 @@ export function SettingsPanel(): React.JSX.Element {
   const warningEnabled = useSettingsStore((s) => s.speedWarningEnabled)
   const warningThreshold = useSettingsStore((s) => s.speedWarningThreshold)
   const setSpeedWarning = useSettingsStore((s) => s.setSpeedWarning)
+  const showGraph = useSettingsStore((s) => s.showGraph)
+  const setShowGraph = useSettingsStore((s) => s.setShowGraph)
 
   if (!open) return <></>
 
   return (
-    <div className="fixed inset-0 z-50 bg-zinc-950/95 flex flex-col">
+    <div className="fixed inset-0 z-50 bg-surface/95 backdrop-blur-xl flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between h-14 px-6 border-b border-zinc-800">
-        <span className="text-lg font-semibold tracking-[2px] text-zinc-300">SETTINGS</span>
+      <div className="flex items-center justify-between h-14 px-6 border-b border-separator">
+        <span className="text-lg font-semibold text-text-primary">Settings</span>
         <button
           onClick={toggleSettings}
-          className="w-12 h-12 flex items-center justify-center text-zinc-400 hover:text-zinc-200"
+          className="w-12 h-12 flex items-center justify-center text-text-secondary active:text-accent transition-colors"
         >
           <X size={24} />
         </button>
@@ -36,14 +37,10 @@ export function SettingsPanel(): React.JSX.Element {
 
       <div className="flex-1 overflow-y-auto px-6 py-6 space-y-8">
         {/* Speed unit */}
-        <Section label="SPEED UNIT">
+        <Section label="Speed Unit">
           <div className="flex gap-2">
             {SPEED_UNITS.map((u) => (
-              <ToggleButton
-                key={u}
-                active={speedUnit === u}
-                onClick={() => setSpeedUnit(u)}
-              >
+              <ToggleButton key={u} active={speedUnit === u} onClick={() => setSpeedUnit(u)}>
                 {speedUnitLabel(u)}
               </ToggleButton>
             ))}
@@ -51,37 +48,28 @@ export function SettingsPanel(): React.JSX.Element {
         </Section>
 
         {/* Altitude unit */}
-        <Section label="ALTITUDE UNIT">
+        <Section label="Altitude Unit">
           <div className="flex gap-2">
             {ALT_UNITS.map((u) => (
-              <ToggleButton
-                key={u}
-                active={altitudeUnit === u}
-                onClick={() => setAltitudeUnit(u)}
-              >
+              <ToggleButton key={u} active={altitudeUnit === u} onClick={() => setAltitudeUnit(u)}>
                 {altitudeUnitLabel(u)}
               </ToggleButton>
             ))}
           </div>
         </Section>
 
-        {/* Speed warning */}
-        <Section label="SPEED WARNING">
+        {/* Speed graph */}
+        <Section label="Speed Graph">
           <div className="flex items-center gap-4">
-            <button
-              onClick={() => setSpeedWarning(!warningEnabled)}
-              className={cn(
-                'w-14 h-8 rounded-full relative transition-colors',
-                warningEnabled ? 'bg-cyan-600' : 'bg-zinc-700'
-              )}
-            >
-              <div
-                className={cn(
-                  'w-6 h-6 rounded-full bg-white absolute top-1 transition-transform',
-                  warningEnabled ? 'translate-x-7' : 'translate-x-1'
-                )}
-              />
-            </button>
+            <Toggle checked={showGraph} onChange={setShowGraph} />
+            <span className="text-sm text-text-secondary">Show speed history graph</span>
+          </div>
+        </Section>
+
+        {/* Speed warning */}
+        <Section label="Speed Warning">
+          <div className="flex items-center gap-4">
+            <Toggle checked={warningEnabled} onChange={(v) => setSpeedWarning(v)} />
             {warningEnabled && (
               <div className="flex items-center gap-2">
                 <input
@@ -90,12 +78,12 @@ export function SettingsPanel(): React.JSX.Element {
                   max={200}
                   value={warningThreshold}
                   onChange={(e) => setSpeedWarning(true, Number(e.target.value))}
-                  className="w-48 accent-cyan-400"
+                  className="w-48 accent-[#0A84FF]"
                 />
-                <span className="font-mono text-lg text-zinc-300 tabular-nums w-16 text-right">
+                <span className="text-lg font-semibold text-text-primary tabular-nums w-16 text-right">
                   {warningThreshold}
                 </span>
-                <span className="text-sm text-zinc-300">
+                <span className="text-sm text-text-secondary">
                   {speedUnitLabel(speedUnit)}
                 </span>
               </div>
@@ -103,18 +91,15 @@ export function SettingsPanel(): React.JSX.Element {
           </div>
         </Section>
 
-        {/* Trips */}
-        <TripListSection />
-
         {/* Map tiles */}
         <MapTilesSection />
 
         {/* Info */}
-        <Section label="ABOUT">
-          <div className="text-sm text-zinc-300 space-y-1">
+        <Section label="About">
+          <div className="text-sm text-text-secondary space-y-1">
             <p>SpeedDeck v0.1.0</p>
             <p>Navisys GR-M02U GNSS Receiver</p>
-            <p className="text-zinc-400">Built for Steam Deck</p>
+            <p className="text-text-tertiary">Built for Steam Deck</p>
           </div>
         </Section>
       </div>
@@ -143,23 +128,23 @@ function MapTilesSection(): React.JSX.Element {
 
   return (
     <div className="space-y-3">
-      <span className="text-xs font-semibold tracking-[2px] uppercase text-zinc-400">MAP TILES</span>
+      <span className="text-[13px] font-semibold tracking-wide uppercase text-text-secondary">Map Tiles</span>
       <div className="flex items-center gap-4">
-        <span className="text-sm text-zinc-300">
+        <span className="text-sm text-text-secondary">
           {tilesExist ? `Downloaded (${cacheMB} MB)` : 'Not downloaded'}
         </span>
         <button
           onClick={() => setShowTileDownload(true)}
-          className="px-4 h-10 rounded-lg text-sm font-semibold tracking-[1px] border bg-zinc-800 text-zinc-300 border-zinc-700 hover:text-cyan-400 hover:border-cyan-400/30 transition-colors"
+          className="px-4 h-12 rounded-2xl text-sm font-semibold bg-surface-card text-text-primary active:bg-surface-active transition-colors"
         >
-          {tilesExist ? 'UPDATE TILES' : 'DOWNLOAD TILES'}
+          {tilesExist ? 'Update Tiles' : 'Download Tiles'}
         </button>
         {tilesExist && (
           <button
             onClick={handleDelete}
-            className="px-4 h-10 rounded-lg text-sm font-semibold tracking-[1px] border bg-zinc-800 text-red-400 border-zinc-700 hover:border-red-800 transition-colors"
+            className="px-4 h-12 rounded-2xl text-sm font-semibold bg-surface-card text-danger active:bg-surface-active transition-colors"
           >
-            DELETE
+            Delete
           </button>
         )}
       </div>
@@ -170,7 +155,7 @@ function MapTilesSection(): React.JSX.Element {
 function Section({ label, children }: { label: string; children: React.ReactNode }): React.JSX.Element {
   return (
     <div className="space-y-3">
-      <span className="text-xs font-semibold tracking-[2px] uppercase text-zinc-400">{label}</span>
+      <span className="text-[13px] font-semibold tracking-wide uppercase text-text-secondary">{label}</span>
       {children}
     </div>
   )
@@ -189,13 +174,32 @@ function ToggleButton({
     <button
       onClick={onClick}
       className={cn(
-        'px-6 h-12 rounded-lg text-sm font-semibold tracking-[1px] border transition-colors',
+        'px-6 h-14 rounded-2xl text-sm font-semibold transition-colors',
         active
-          ? 'bg-cyan-900/50 text-cyan-400 border-cyan-400/30'
-          : 'bg-zinc-800 text-zinc-300 border-zinc-700'
+          ? 'bg-accent/15 text-accent'
+          : 'bg-surface-card text-text-secondary active:bg-surface-active'
       )}
     >
       {children}
+    </button>
+  )
+}
+
+function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }): React.JSX.Element {
+  return (
+    <button
+      onClick={() => onChange(!checked)}
+      className={cn(
+        'w-14 h-8 rounded-full relative transition-colors',
+        checked ? 'bg-success' : 'bg-surface-active'
+      )}
+    >
+      <div
+        className={cn(
+          'w-6 h-6 rounded-full bg-white absolute top-1 transition-transform',
+          checked ? 'translate-x-7' : 'translate-x-1'
+        )}
+      />
     </button>
   )
 }
