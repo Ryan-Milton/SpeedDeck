@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { useGpsStore } from '../../stores/gps-store'
+import { useNavigationStore } from '../../stores/navigation-store'
 import { resolveMapStyle, checkOnlineStyle, speedToColor } from '../../lib/map-style'
 
 const DEFAULT_ZOOM = 16
@@ -72,6 +73,28 @@ export function LiveMap(): React.JSX.Element {
             'line-width': 3,
             'line-color': ['get', 'color']
           }
+        })
+
+        // Navigation route line — apply current route if one exists
+        const currentRoute = useNavigationStore.getState().route
+        const routeGeom = currentRoute
+          ? currentRoute.geometry
+          : { type: 'LineString' as const, coordinates: [] as number[][] }
+        map.addSource('route', {
+          type: 'geojson',
+          data: { type: 'Feature', geometry: routeGeom, properties: {} }
+        })
+        map.addLayer({
+          id: 'route-outline',
+          type: 'line',
+          source: 'route',
+          paint: { 'line-width': 8, 'line-color': '#000000', 'line-opacity': 0.3 }
+        })
+        map.addLayer({
+          id: 'route-line',
+          type: 'line',
+          source: 'route',
+          paint: { 'line-width': 5, 'line-color': '#0A84FF', 'line-opacity': 0.85 }
         })
 
         // Vehicle position dot (GeoJSON-based, stays in sync with map center)
@@ -146,6 +169,16 @@ export function LiveMap(): React.JSX.Element {
             map.addSource('trail', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
             map.addLayer({ id: 'trail-outline', type: 'line', source: 'trail', paint: { 'line-width': 6, 'line-color': '#000000', 'line-opacity': 0.3 } })
             map.addLayer({ id: 'trail-line', type: 'line', source: 'trail', paint: { 'line-width': 3, 'line-color': ['get', 'color'] } })
+          }
+          // Route source + layers — re-apply current navigation route if active
+          if (!map.getSource('route')) {
+            const navRoute = useNavigationStore.getState().route
+            const routeData = navRoute
+              ? { type: 'Feature' as const, geometry: navRoute.geometry, properties: {} }
+              : { type: 'Feature' as const, geometry: { type: 'LineString' as const, coordinates: [] as number[][] }, properties: {} }
+            map.addSource('route', { type: 'geojson', data: routeData })
+            map.addLayer({ id: 'route-outline', type: 'line', source: 'route', paint: { 'line-width': 8, 'line-color': '#000000', 'line-opacity': 0.3 } })
+            map.addLayer({ id: 'route-line', type: 'line', source: 'route', paint: { 'line-width': 5, 'line-color': '#0A84FF', 'line-opacity': 0.85 } })
           }
           mapReadyRef.current = true
         })
@@ -238,6 +271,64 @@ export function LiveMap(): React.JSX.Element {
     })
 
     return unsub
+  }, [])
+
+  // Subscribe to navigation route changes
+  // Subscribe to navigation route and status changes
+  useEffect(() => {
+    // Apply current route immediately when this effect mounts (handles tab switching)
+    const applyRoute = (): void => {
+      const map = mapRef.current
+      if (!map || !mapReadyRef.current) return
+      const src = map.getSource('route') as maplibregl.GeoJSONSource | undefined
+      if (!src) return
+      const route = useNavigationStore.getState().route
+      if (route) {
+        src.setData({ type: 'Feature', geometry: route.geometry, properties: {} })
+      }
+    }
+    // Delay slightly to ensure map is ready after mount
+    const timer = setTimeout(applyRoute, 200)
+
+    const unsub = useNavigationStore.subscribe((state, prev) => {
+      const map = mapRef.current
+      if (!map || !mapReadyRef.current) return
+
+      // Update route line when route changes
+      if (state.route !== prev.route) {
+        const src = map.getSource('route') as maplibregl.GeoJSONSource | undefined
+        if (!src) return
+        if (state.route) {
+          src.setData({ type: 'Feature', geometry: state.route.geometry, properties: {} })
+
+          // Fit map to show the full route when previewing
+          if (state.status === 'previewing') {
+            const coords = state.route.geometry.coordinates
+            if (coords.length >= 2) {
+              const bounds = coords.reduce(
+                (b, c) => [
+                  [Math.min(b[0][0], c[0]), Math.min(b[0][1], c[1])],
+                  [Math.max(b[1][0], c[0]), Math.max(b[1][1], c[1])]
+                ] as [[number, number], [number, number]],
+                [[Infinity, Infinity], [-Infinity, -Infinity]] as [[number, number], [number, number]]
+              )
+              map.fitBounds(bounds as maplibregl.LngLatBoundsLike, {
+                padding: { top: 80, right: 80, bottom: 160, left: 80 },
+                pitch: 0,
+                bearing: 0,
+                duration: 500
+              })
+            }
+          }
+        } else {
+          src.setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: [] }, properties: {} })
+        }
+      }
+    })
+    return (): void => {
+      clearTimeout(timer)
+      unsub()
+    }
   }, [])
 
   return (

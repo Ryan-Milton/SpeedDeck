@@ -19,12 +19,20 @@ import { TileDownloadOverlay } from './components/map/TileDownloadOverlay'
 import { LiveMap } from './components/map/LiveMap'
 import { MapOverlays } from './components/map/MapOverlays'
 import { TripsView } from './components/trips/TripsView'
+import { useNavigation } from './hooks/useNavigation'
+import { SearchOverlay } from './components/navigation/SearchOverlay'
+import { RoutePreview } from './components/navigation/RoutePreview'
+import { TurnBanner } from './components/navigation/TurnBanner'
+import { NavStatusBar } from './components/navigation/NavStatusBar'
+import { DashboardNavOverlay } from './components/navigation/DashboardNavOverlay'
+import { RoutingDataOverlay } from './components/navigation/RoutingDataOverlay'
 import { convertSpeed } from './lib/utils'
 import { cn } from './lib/utils'
 
 export default function App(): React.JSX.Element {
   useGpsConnection()
   useSwipeNavigation()
+  useNavigation()
 
   const showGraph = useSettingsStore((s) => s.showGraph)
   const viewMode = useSettingsStore((s) => s.viewMode)
@@ -92,6 +100,8 @@ export default function App(): React.JSX.Element {
           <div className="flex-1 relative min-h-0">
             <LiveMap />
             <MapOverlays compact />
+            <TurnBanner />
+            <NavStatusBar />
             {/* Trip button overlay — top right */}
             <div className="absolute top-4 right-4 pointer-events-auto">
               <button
@@ -114,6 +124,10 @@ export default function App(): React.JSX.Element {
         <div className="flex-1 relative min-h-0">
           <LiveMap />
           <MapOverlays />
+          <TurnBanner />
+          <NavStatusBar />
+          <RoutePreview />
+          <SearchOverlay />
           <div className="absolute bottom-4 left-4 right-4">
             <TripRecordingCard />
           </div>
@@ -131,6 +145,7 @@ export default function App(): React.JSX.Element {
       <SettingsPanel />
       <TripDetailView />
       <TileDownloadOverlay />
+      <RoutingDataOverlay />
     </div>
   )
 }

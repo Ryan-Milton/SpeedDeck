@@ -65,14 +65,23 @@ class WebSocketServer:
             except asyncio.QueueFull:
                 pass
 
+    async def send_to_client(self, ws: ServerConnection, message: str) -> None:
+        """Send a message to a single client with timeout."""
+        try:
+            await asyncio.wait_for(ws.send(message), timeout=5.0)
+        except (websockets.ConnectionClosed, asyncio.TimeoutError, Exception):
+            self._clients.discard(ws)
+
     async def send_to_all(self, message: str) -> None:
         if not self._clients:
             return
         dead = set()
         for client in self._clients:
             try:
-                await client.send(message)
-            except websockets.ConnectionClosed:
+                await asyncio.wait_for(client.send(message), timeout=2.0)
+            except (websockets.ConnectionClosed, asyncio.TimeoutError):
+                dead.add(client)
+            except Exception:
                 dead.add(client)
         self._clients -= dead
 
@@ -91,7 +100,7 @@ class WebSocketServer:
             async for raw in ws:
                 cmd = parse_command(raw)
                 if cmd["type"] == "command" and self._command_handler:
-                    response = await self._command_handler(cmd)
+                    response = await self._command_handler(cmd, ws)
                     if response:
                         await ws.send(response)
         except websockets.ConnectionClosed:

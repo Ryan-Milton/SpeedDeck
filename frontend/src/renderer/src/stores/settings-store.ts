@@ -14,6 +14,7 @@ interface SettingsState {
   viewMode: ViewMode
   tilesAvailable: boolean
   showTileDownload: boolean
+  showRoutingDownload: boolean
 
   setSpeedUnit: (unit: SpeedUnit) => void
   cycleSpeedUnit: () => void
@@ -24,6 +25,7 @@ interface SettingsState {
   setViewMode: (mode: ViewMode) => void
   setTilesAvailable: (available: boolean) => void
   setShowTileDownload: (show: boolean) => void
+  setShowRoutingDownload: (show: boolean) => void
 }
 
 const UNIT_CYCLE: SpeedUnit[] = ['mph', 'kmh', 'knots']
@@ -40,6 +42,7 @@ export const useSettingsStore = create<SettingsState>()(
       viewMode: 'dashboard',
       tilesAvailable: false,
       showTileDownload: false,
+      showRoutingDownload: false,
 
       setSpeedUnit: (unit): void => set({ speedUnit: unit }),
 
@@ -65,12 +68,14 @@ export const useSettingsStore = create<SettingsState>()(
 
       setTilesAvailable: (available): void => set({ tilesAvailable: available }),
 
-      setShowTileDownload: (show): void => set({ showTileDownload: show })
+      setShowTileDownload: (show): void => set({ showTileDownload: show }),
+
+      setShowRoutingDownload: (show): void => set({ showRoutingDownload: show })
     }),
     {
       name: 'gps-speedometer-settings',
       partialize: (state) => {
-        const { showTileDownload, settingsOpen, ...persisted } = state
+        const { showTileDownload, showRoutingDownload, settingsOpen, ...persisted } = state
         return persisted
       },
       // Migrate old 'hud'/'map' viewMode to new values

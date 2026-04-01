@@ -1,6 +1,8 @@
 import { useSettingsStore } from '../../stores/settings-store'
+import { useNavigationStore } from '../../stores/navigation-store'
 import { cn, speedUnitLabel, altitudeUnitLabel } from '../../lib/utils'
 import { X } from 'lucide-react'
+import { GpsWebSocketClient } from '../../lib/ws-client'
 import type { SpeedUnit, AltitudeUnit } from '../../types/gps'
 import { useEffect, useState } from 'react'
 
@@ -94,6 +96,9 @@ export function SettingsPanel(): React.JSX.Element {
         {/* Map tiles */}
         <MapTilesSection />
 
+        {/* Navigation data */}
+        <NavDataSection />
+
         {/* Info */}
         <Section label="About">
           <div className="text-sm text-text-secondary space-y-1">
@@ -142,6 +147,75 @@ function MapTilesSection(): React.JSX.Element {
         {tilesExist && (
           <button
             onClick={handleDelete}
+            className="px-4 h-12 rounded-2xl text-sm font-semibold bg-surface-card text-danger active:bg-surface-active transition-colors"
+          >
+            Delete
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function NavDataSection(): React.JSX.Element {
+  const setShowRoutingDownload = useSettingsStore((s) => s.setShowRoutingDownload)
+  const osrmReady = useNavigationStore((s) => s.osrmReady)
+  const [navStatus, setNavStatus] = useState<{ installedRegion: { regionName: string } | null; installedSizeMb: number; routerRunning: boolean } | null>(null)
+
+  // Query backend for actual OSRM status on mount
+  useEffect(() => {
+    const client = new GpsWebSocketClient('ws://127.0.0.1:8765')
+    client.onMessage = (msg): void => {
+      const data = msg as Record<string, unknown>
+      if (data.type === 'navStatus') {
+        const status = data as typeof navStatus
+        setNavStatus(status)
+        if (status?.routerRunning) {
+          useNavigationStore.getState().setOsrmReady(true)
+        }
+      }
+    }
+    client.onConnectionChange = (connected): void => {
+      if (connected) client.send({ type: 'command', action: 'nav_get_status' })
+    }
+    client.connect()
+    return (): void => client.disconnect()
+  }, [])
+
+  const hasData = navStatus?.installedRegion != null || osrmReady
+  const regionName = navStatus?.installedRegion?.regionName ?? ''
+  const sizeMb = navStatus?.installedSizeMb ?? 0
+
+  return (
+    <div className="space-y-3">
+      <span className="text-[13px] font-semibold tracking-wide uppercase text-text-secondary">Navigation Data</span>
+      <div className="flex items-center gap-4">
+        <span className="text-sm text-text-secondary">
+          {hasData ? `${regionName} (${sizeMb} MB)` : 'No routing data'}
+        </span>
+        <button
+          onClick={() => setShowRoutingDownload(true)}
+          className="px-4 h-12 rounded-2xl text-sm font-semibold bg-surface-card text-text-primary active:bg-surface-active transition-colors"
+        >
+          {hasData ? 'Update' : 'Download'}
+        </button>
+        {hasData && (
+          <button
+            onClick={() => {
+              const client = new GpsWebSocketClient('ws://127.0.0.1:8765')
+              client.onMessage = (msg): void => {
+                const data = msg as Record<string, unknown>
+                if (data.type === 'navStatus') {
+                  setNavStatus(data as typeof navStatus)
+                  useNavigationStore.getState().setOsrmReady(false)
+                  client.disconnect()
+                }
+              }
+              client.onConnectionChange = (connected): void => {
+                if (connected) client.send({ type: 'command', action: 'nav_delete_region' })
+              }
+              client.connect()
+            }}
             className="px-4 h-12 rounded-2xl text-sm font-semibold bg-surface-card text-danger active:bg-surface-active transition-colors"
           >
             Delete
