@@ -252,7 +252,7 @@ class OsrmManager:
         oa_zip = self._region_dir(region_id) / "openaddresses.zip"
         oa_path = str(oa_gz) if oa_gz.exists() else (str(oa_zip) if oa_zip.exists() else None)
         oa_zip_arg = oa_path
-        await asyncio.get_event_loop().run_in_executor(
+        await asyncio.get_running_loop().run_in_executor(
             None, build_geocoder_index, str(pbf_path), str(self._places_db_path(region_id)), oa_zip_arg
         )
 

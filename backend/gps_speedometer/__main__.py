@@ -230,7 +230,11 @@ async def main() -> None:
             near_lon = cmd.get("nearLon")
             if not nav["geocoder"]:
                 return json.dumps({"type": "geocodeResults", "results": []})
-            results = nav["geocoder"].search(query, limit=10, near_lat=near_lat, near_lon=near_lon)
+            # Run in executor to avoid blocking the event loop (Nominatim fallback is synchronous HTTP)
+            loop = asyncio.get_running_loop()
+            results = await loop.run_in_executor(
+                None, nav["geocoder"].search, query, 10, near_lat, near_lon
+            )
             return json.dumps({"type": "geocodeResults", "results": results})
 
         elif action == "calculate_route":

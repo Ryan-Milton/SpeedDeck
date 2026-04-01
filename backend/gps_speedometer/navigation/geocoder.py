@@ -284,7 +284,7 @@ def _nominatim_search(query: str, near_lat: float | None, near_lon: float | None
             "q": query,
             "format": "json",
             "limit": "5",
-            "countrycodes": "us",
+            # No countrycodes filter — regions include US, Canada, Europe
             "addressdetails": "1",
         }
         if near_lat is not None and near_lon is not None:

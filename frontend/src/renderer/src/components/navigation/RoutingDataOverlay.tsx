@@ -102,20 +102,15 @@ export function RoutingDataOverlay(): React.JSX.Element | null {
   }, [])
 
   const handleDownload = useCallback((region: RegionInfo) => {
-    console.log('[RoutingData] handleDownload called for:', region.id)
     setSelectedRegion(region)
     setPhase('downloading')
     setDownloadProgress({ percent: 0, downloadedMb: 0, totalMb: region.estimatedSizeMb, step: 'download' })
     setError(null)
 
     const client = wsRef.current
-    console.log('[RoutingData] wsRef.current:', client ? 'exists' : 'NULL', 'connected:', client?.connected)
     if (client) {
       client.send({ type: 'command', action: 'nav_download_region', regionId: region.id })
-      console.log('[RoutingData] sent nav_download_region, starting poll')
       startPolling(client)
-    } else {
-      console.error('[RoutingData] NO WebSocket client available!')
     }
   }, [startPolling])
 
