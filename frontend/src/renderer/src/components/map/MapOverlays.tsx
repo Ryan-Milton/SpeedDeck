@@ -1,6 +1,8 @@
 import { useGpsStore } from '../../stores/gps-store'
+import { useNavigationStore } from '../../stores/navigation-store'
 import { MapSpeedWidget } from './MapSpeedWidget'
 import { cardinalDirection, cn } from '../../lib/utils'
+import { Search } from 'lucide-react'
 
 export function MapOverlays({ compact }: { compact?: boolean }): React.JSX.Element {
   const heading = useGpsStore((s) => s.fix?.heading ?? 0)
@@ -42,13 +44,32 @@ export function MapOverlays({ compact }: { compact?: boolean }): React.JSX.Eleme
           )}
         </div>
 
-        {/* Top-right: speed (full map mode only) */}
+        {/* Top-right: speed + search (full map mode only) */}
         {!compact && (
-          <div className="pointer-events-auto">
+          <div className="pointer-events-auto flex flex-col gap-2 items-end">
             <MapSpeedWidget />
+            <SearchButton />
           </div>
         )}
       </div>
     </div>
+  )
+}
+
+function SearchButton(): React.JSX.Element | null {
+  const osrmReady = useNavigationStore((s) => s.osrmReady)
+  const navStatus = useNavigationStore((s) => s.status)
+  const setSearchOpen = useNavigationStore((s) => s.setSearchOpen)
+
+  // Hide when navigating (turn banner takes precedence) or OSRM not ready
+  if (!osrmReady || navStatus === 'navigating') return null
+
+  return (
+    <button
+      onClick={() => setSearchOpen(true)}
+      className="w-12 h-12 rounded-2xl bg-surface-card/90 backdrop-blur-xl flex items-center justify-center text-text-secondary active:text-accent transition-colors"
+    >
+      <Search size={20} />
+    </button>
   )
 }
