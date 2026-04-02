@@ -49,16 +49,26 @@ export function TripStatsBar(): React.JSX.Element {
     }
   }, [])
 
-  /** Commits the rename to the backend. Called by Enter and by onBlur (when neither
-   *  isSavingRef nor isCanceledRef are set). */
-  const performRename = (): void => {
-    const trimmed = editValue.trim()
-    setEditing(false)
+  /** Resets guard refs and enters editing mode. */
+  const startEditing = (): void => {
+    isSavingRef.current = false
+    isCanceledRef.current = false
+    setEditing(true)
+  }
 
-    if (!trimmed || trimmed === name || !selectedTripId) {
-      isSavingRef.current = false
+  /** Commits the rename to the backend. Called by both Enter and onBlur.
+   *  isSavingRef stays set until the next startEditing() call, so the
+   *  onBlur that fires when the input unmounts always hits the guard. */
+  const performRename = (): void => {
+    if (isSavingRef.current) return
+    if (isCanceledRef.current) {
+      isCanceledRef.current = false
       return
     }
+    isSavingRef.current = true
+    const trimmed = editValue.trim()
+    setEditing(false)
+    if (!trimmed || trimmed === name || !selectedTripId) return
 
     // Disconnect any previous in-flight client before starting a new one
     wsClientRef.current?.disconnect()
@@ -74,22 +84,9 @@ export function TripStatsBar(): React.JSX.Element {
         client.disconnect()
         wsClientRef.current = null
       }
-      // Reset after the async operation completes (success or connection failure)
-      isSavingRef.current = false
     }
 
     client.connect()
-  }
-
-  /** onBlur handler - guards against double-fire from input unmount. */
-  const handleBlur = (): void => {
-    // isSavingRef: Enter already triggered performRename; skip this blur-induced call.
-    // isCanceledRef: Escape was pressed; never commit the rename.
-    if (isSavingRef.current || isCanceledRef.current) {
-      isCanceledRef.current = false
-      return
-    }
-    performRename()
   }
 
   const duration = trip?.startedAt && trip?.endedAt
@@ -112,27 +109,16 @@ export function TripStatsBar(): React.JSX.Element {
           ref={inputRef}
           value={editValue}
           onChange={(e) => setEditValue(e.target.value)}
-          onBlur={handleBlur}
+          onBlur={performRename}
           onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              // Set isSavingRef BEFORE performRename so the onBlur that fires when
-              // the input unmounts (due to setEditing(false) inside performRename)
-              // sees the flag as true and skips the duplicate save.
-              isSavingRef.current = true
-              performRename()
-            }
-            if (e.key === "Escape") {
-              // Set isCanceledRef BEFORE setEditing(false) so the onBlur that fires
-              // on unmount does not commit the rename.
-              isCanceledRef.current = true
-              setEditing(false)
-            }
+            if (e.key === "Enter") performRename()
+            if (e.key === "Escape") { isCanceledRef.current = true; setEditing(false) }
           }}
           className="text-lg font-semibold text-text-primary bg-surface-card rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-accent max-w-[200px]"
         />
       ) : (
         <button
-          onClick={() => setEditing(true)}
+          onClick={startEditing}
           className="flex items-center gap-2 text-lg font-semibold text-text-primary truncate hover:text-accent transition-colors"
         >
           <span className="truncate">{name}</span>
