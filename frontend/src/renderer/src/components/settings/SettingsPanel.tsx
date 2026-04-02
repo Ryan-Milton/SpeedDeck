@@ -3,11 +3,12 @@ import { useNavigationStore } from '../../stores/navigation-store'
 import { cn, speedUnitLabel, altitudeUnitLabel } from '../../lib/utils'
 import { X } from 'lucide-react'
 import { GpsWebSocketClient } from '../../lib/ws-client'
-import type { SpeedUnit, AltitudeUnit } from '../../types/gps'
+import type { SpeedUnit, AltitudeUnit, CoordFormat } from '../../types/gps'
 import { useEffect, useState } from 'react'
 
 const SPEED_UNITS: SpeedUnit[] = ['mph', 'kmh', 'knots']
 const ALT_UNITS: AltitudeUnit[] = ['ft', 'm']
+const COORD_FORMATS: CoordFormat[] = ['dd', 'dms']
 
 export function SettingsPanel(): React.JSX.Element {
   const open = useSettingsStore((s) => s.settingsOpen)
@@ -16,6 +17,8 @@ export function SettingsPanel(): React.JSX.Element {
   const setSpeedUnit = useSettingsStore((s) => s.setSpeedUnit)
   const altitudeUnit = useSettingsStore((s) => s.altitudeUnit)
   const setAltitudeUnit = useSettingsStore((s) => s.setAltitudeUnit)
+  const coordFormat = useSettingsStore((s) => s.coordFormat)
+  const setCoordFormat = useSettingsStore((s) => s.setCoordFormat)
   const warningEnabled = useSettingsStore((s) => s.speedWarningEnabled)
   const warningThreshold = useSettingsStore((s) => s.speedWarningThreshold)
   const setSpeedWarning = useSettingsStore((s) => s.setSpeedWarning)
@@ -55,6 +58,17 @@ export function SettingsPanel(): React.JSX.Element {
             {ALT_UNITS.map((u) => (
               <ToggleButton key={u} active={altitudeUnit === u} onClick={() => setAltitudeUnit(u)}>
                 {altitudeUnitLabel(u)}
+              </ToggleButton>
+            ))}
+          </div>
+        </Section>
+
+        {/* Coordinate format */}
+        <Section label="Coordinate Format">
+          <div className="flex gap-2">
+            {COORD_FORMATS.map((f) => (
+              <ToggleButton key={f} active={coordFormat === f} onClick={() => setCoordFormat(f)}>
+                {f === 'dd' ? 'Decimal (DD)' : 'Degrees (DMS)'}
               </ToggleButton>
             ))}
           </div>

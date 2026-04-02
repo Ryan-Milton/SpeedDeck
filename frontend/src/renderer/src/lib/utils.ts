@@ -72,8 +72,16 @@ export function altitudeUnitLabel(unit: string): string {
   return 'M'
 }
 
-export function formatCoord(deg: number, isLat: boolean): string {
+export function formatCoord(deg: number, isLat: boolean, format: string = 'dd'): string {
   const dir = isLat ? (deg >= 0 ? 'N' : 'S') : deg >= 0 ? 'E' : 'W'
+  if (format === 'dms') {
+    const abs = Math.abs(deg)
+    const d = Math.floor(abs)
+    const mFloat = (abs - d) * 60
+    const m = Math.floor(mFloat)
+    const s = ((mFloat - m) * 60).toFixed(1)
+    return `${d}° ${String(m).padStart(2, '0')}' ${s}" ${dir}`
+  }
   return `${Math.abs(deg).toFixed(4)}° ${dir}`
 }
 

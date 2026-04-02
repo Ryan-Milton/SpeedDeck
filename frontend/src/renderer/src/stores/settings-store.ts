@@ -1,12 +1,13 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { SpeedUnit, AltitudeUnit } from '../types/gps'
+import type { SpeedUnit, AltitudeUnit, CoordFormat } from '../types/gps'
 
 type ViewMode = 'dashboard' | 'map' | 'trips'
 
 interface SettingsState {
   speedUnit: SpeedUnit
   altitudeUnit: AltitudeUnit
+  coordFormat: CoordFormat
   speedWarningEnabled: boolean
   speedWarningThreshold: number // stored in current unit
   showGraph: boolean
@@ -19,6 +20,7 @@ interface SettingsState {
   setSpeedUnit: (unit: SpeedUnit) => void
   cycleSpeedUnit: () => void
   setAltitudeUnit: (unit: AltitudeUnit) => void
+  setCoordFormat: (format: CoordFormat) => void
   setSpeedWarning: (enabled: boolean, threshold?: number) => void
   setShowGraph: (show: boolean) => void
   toggleSettings: () => void
@@ -35,6 +37,7 @@ export const useSettingsStore = create<SettingsState>()(
     (set, get) => ({
       speedUnit: 'mph',
       altitudeUnit: 'ft',
+      coordFormat: 'dd',
       speedWarningEnabled: false,
       speedWarningThreshold: 80,
       showGraph: false,
@@ -53,6 +56,8 @@ export const useSettingsStore = create<SettingsState>()(
       },
 
       setAltitudeUnit: (unit): void => set({ altitudeUnit: unit }),
+
+      setCoordFormat: (format): void => set({ coordFormat: format }),
 
       setSpeedWarning: (enabled, threshold): void =>
         set({

@@ -1,7 +1,8 @@
 import { useGpsStore } from '../../stores/gps-store'
+import { useSettingsStore } from '../../stores/settings-store'
 import { useNavigationStore } from '../../stores/navigation-store'
 import { MapSpeedWidget } from './MapSpeedWidget'
-import { cardinalDirection, cn } from '../../lib/utils'
+import { cardinalDirection, formatCoord, cn } from '../../lib/utils'
 import { Search } from 'lucide-react'
 
 export function MapOverlays({ compact }: { compact?: boolean }): React.JSX.Element {
@@ -9,6 +10,9 @@ export function MapOverlays({ compact }: { compact?: boolean }): React.JSX.Eleme
   const hasFix = useGpsStore((s) => s.fix !== null && s.fix.fixQuality > 0)
   const connected = useGpsStore((s) => s.connected)
   const fixQuality = useGpsStore((s) => s.fix?.fixQuality ?? 0)
+  const latitude = useGpsStore((s) => s.fix?.latitude)
+  const longitude = useGpsStore((s) => s.fix?.longitude)
+  const coordFormat = useSettingsStore((s) => s.coordFormat)
 
   const cardinal = cardinalDirection(heading)
   const displayHeading = hasFix ? Math.round(heading) : null
@@ -33,14 +37,26 @@ export function MapOverlays({ compact }: { compact?: boolean }): React.JSX.Eleme
             </div>
           </div>
           {!compact && (
-            <div className="rounded-2xl flex items-baseline gap-2 px-4 py-2 bg-surface-card/90 backdrop-blur-xl">
-              <span className="font-semibold text-text-primary" style={{ fontSize: 28 }}>
-                {hasFix ? cardinal : '--'}
-              </span>
-              <span className="text-text-secondary" style={{ fontSize: 20 }}>
-                {displayHeading !== null ? `${displayHeading}°` : ''}
-              </span>
-            </div>
+            <>
+              <div className="rounded-2xl flex items-baseline gap-2 px-4 py-2 bg-surface-card/90 backdrop-blur-xl">
+                <span className="font-semibold text-text-primary" style={{ fontSize: 28 }}>
+                  {hasFix ? cardinal : '--'}
+                </span>
+                <span className="text-text-secondary" style={{ fontSize: 20 }}>
+                  {displayHeading !== null ? `${displayHeading}°` : ''}
+                </span>
+              </div>
+              {hasFix && latitude !== undefined && longitude !== undefined && (
+                <div className="rounded-2xl px-3 py-1.5 bg-surface-card/90 backdrop-blur-xl">
+                  <div className="text-[11px] font-semibold text-text-secondary tabular-nums leading-tight">
+                    {formatCoord(latitude, true, coordFormat)}
+                  </div>
+                  <div className="text-[11px] font-semibold text-text-secondary tabular-nums leading-tight">
+                    {formatCoord(longitude, false, coordFormat)}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
 
