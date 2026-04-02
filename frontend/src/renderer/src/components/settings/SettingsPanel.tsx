@@ -193,7 +193,13 @@ function NavDataSection(): React.JSX.Element {
       if (connected) client.send({ type: 'command', action: 'nav_get_status' })
     }
     client.connect()
-    return (): void => client.disconnect()
+    return (): void => {
+      client.disconnect()
+      if (deleteClientRef.current) {
+        deleteClientRef.current.disconnect()
+        deleteClientRef.current = null
+      }
+    }
   }, [])
 
   // Cleanup any in-flight delete client on unmount
@@ -217,6 +223,7 @@ function NavDataSection(): React.JSX.Element {
       if (data.type === 'navStatus') {
         setNavStatus(data as typeof navStatus)
         useNavigationStore.getState().setOsrmReady(false)
+        deleteClientRef.current = null
         client.disconnect()
         deleteClientRef.current = null
       }
