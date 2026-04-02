@@ -55,8 +55,10 @@ async def calculate_route(
 
             async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                 if resp.status == 400 and "maxspeed" in annotations:
-                    log.warning("OSRM does not support maxspeed annotations; retrying without")
-                    continue
+                    body = await resp.json()
+                    if "maxspeed" in body.get("message", ""):
+                        log.warning("OSRM does not support maxspeed annotations; retrying without")
+                        continue
                 if resp.status != 200:
                     raise RuntimeError(f"OSRM request failed: HTTP {resp.status}")
                 data = await resp.json()

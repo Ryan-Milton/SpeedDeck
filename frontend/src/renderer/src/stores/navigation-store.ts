@@ -120,9 +120,14 @@ export const useNavigationStore = create<NavigationState>()((set, get) => ({
       cachedStepRanges = []
     }
     const wasNavigating = get().status === 'navigating'
+    const newEta = wasNavigating && route
+      ? new Date(Date.now() + (route.duration ?? 0) * 1000)
+          .toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : ''
     set({
       route,
       status: route ? (wasNavigating ? 'navigating' : 'previewing') : 'idle',
+      eta: newEta,
       activeStepIndex: 0,
       distanceToNextManeuver: 0,
       distanceRemaining: route?.distance ?? 0,
