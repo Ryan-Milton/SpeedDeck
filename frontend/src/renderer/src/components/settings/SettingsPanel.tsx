@@ -5,7 +5,7 @@ import { X } from 'lucide-react'
 import { GpsWebSocketClient } from '../../lib/ws-client'
 import { ConfirmDialog } from '../shared/ConfirmDialog'
 import type { SpeedUnit, AltitudeUnit } from '../../types/gps'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 const SPEED_UNITS: SpeedUnit[] = ['mph', 'kmh', 'knots']
 const ALT_UNITS: AltitudeUnit[] = ['ft', 'm']
@@ -174,6 +174,7 @@ function NavDataSection(): React.JSX.Element {
   const osrmReady = useNavigationStore((s) => s.osrmReady)
   const [navStatus, setNavStatus] = useState<{ installedRegion: { regionName: string } | null; installedSizeMb: number; routerRunning: boolean } | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const deleteClientRef = useRef<GpsWebSocketClient | null>(null)
 
   // Query backend for actual OSRM status on mount
   useEffect(() => {
@@ -195,6 +196,14 @@ function NavDataSection(): React.JSX.Element {
     return (): void => client.disconnect()
   }, [])
 
+  // Cleanup any in-flight delete client on unmount
+  useEffect(() => {
+    return (): void => {
+      deleteClientRef.current?.disconnect()
+      deleteClientRef.current = null
+    }
+  }, [])
+
   const hasData = navStatus?.installedRegion != null || osrmReady
   const regionName = navStatus?.installedRegion?.regionName ?? ''
   const sizeMb = navStatus?.installedSizeMb ?? 0
@@ -202,12 +211,14 @@ function NavDataSection(): React.JSX.Element {
   const handleDelete = (): void => {
     setConfirmDelete(false)
     const client = new GpsWebSocketClient('ws://127.0.0.1:8765')
+    deleteClientRef.current = client
     client.onMessage = (msg): void => {
       const data = msg as Record<string, unknown>
       if (data.type === 'navStatus') {
         setNavStatus(data as typeof navStatus)
         useNavigationStore.getState().setOsrmReady(false)
         client.disconnect()
+        deleteClientRef.current = null
       }
     }
     client.onConnectionChange = (connected): void => {
