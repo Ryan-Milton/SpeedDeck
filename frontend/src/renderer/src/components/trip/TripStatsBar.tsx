@@ -1,10 +1,12 @@
+import { useState, useRef, useEffect } from 'react'
 import { useTripViewerStore } from '../../stores/trip-viewer-store'
 import { useSettingsStore } from '../../stores/settings-store'
 import {
   convertSpeed, convertDistance, convertAltitude,
   speedUnitLabel, distanceUnitLabel, altitudeUnitLabel, formatDuration
 } from '../../lib/utils'
-import { ChevronLeft } from 'lucide-react'
+import { GpsWebSocketClient } from '../../lib/ws-client'
+import { ChevronLeft, Pencil } from 'lucide-react'
 import type { Trackpoint } from '../../types/gps'
 
 export function TripStatsBar(): React.JSX.Element {
@@ -12,11 +14,41 @@ export function TripStatsBar(): React.JSX.Element {
   const selectedTripId = useTripViewerStore((s) => s.selectedTripId)
   const trackpoints = useTripViewerStore((s) => s.trackpoints)
   const closeDetail = useTripViewerStore((s) => s.closeDetail)
+  const setTrips = useTripViewerStore((s) => s.setTrips)
   const speedUnit = useSettingsStore((s) => s.speedUnit)
   const altUnit = useSettingsStore((s) => s.altitudeUnit)
 
   const trip = trips.find((t) => t.id === selectedTripId)
   const name = trip?.name || `Trip #${selectedTripId}`
+
+  const [editing, setEditing] = useState(false)
+  const [editValue, setEditValue] = useState(name)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (editing) {
+      setEditValue(name)
+      setTimeout(() => inputRef.current?.focus(), 50)
+    }
+  }, [editing, name])
+
+  const handleRename = (): void => {
+    const trimmed = editValue.trim()
+    setEditing(false)
+    if (!trimmed || trimmed === name || !selectedTripId) return
+
+    // Send rename command to backend
+    const client = new GpsWebSocketClient('ws://127.0.0.1:8765')
+    client.onConnectionChange = (connected): void => {
+      if (connected) {
+        client.send({ type: 'command', action: 'trip_rename', tripId: selectedTripId, name: trimmed })
+        // Update local state immediately
+        setTrips(trips.map((t) => t.id === selectedTripId ? { ...t, name: trimmed } : t))
+        client.disconnect()
+      }
+    }
+    client.connect()
+  }
 
   const duration = trip?.startedAt && trip?.endedAt
     ? (new Date(trip.endedAt).getTime() - new Date(trip.startedAt).getTime()) / 1000
@@ -33,7 +65,27 @@ export function TripStatsBar(): React.JSX.Element {
         <ChevronLeft size={24} />
       </button>
 
-      <span className="text-lg font-semibold text-text-primary truncate">{name}</span>
+      {editing ? (
+        <input
+          ref={inputRef}
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onBlur={handleRename}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleRename()
+            if (e.key === 'Escape') setEditing(false)
+          }}
+          className="text-lg font-semibold text-text-primary bg-surface-card rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-accent max-w-[200px]"
+        />
+      ) : (
+        <button
+          onClick={() => setEditing(true)}
+          className="flex items-center gap-2 text-lg font-semibold text-text-primary truncate hover:text-accent transition-colors"
+        >
+          <span className="truncate">{name}</span>
+          <Pencil size={14} className="text-text-secondary shrink-0" />
+        </button>
+      )}
 
       <div className="flex-1" />
 
