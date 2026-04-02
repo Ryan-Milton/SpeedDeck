@@ -108,11 +108,11 @@ app.whenReady().then(async () => {
     }
   })
 
-  ipcMain.handle('show-save-dialog', async () => {
+  ipcMain.handle('show-save-dialog', async (_event, defaultFilename?: string) => {
     if (!mainWindow) return null
     const result = await dialog.showSaveDialog(mainWindow, {
       filters: [{ name: 'GPX Files', extensions: ['gpx'] }],
-      defaultPath: 'trip.gpx'
+      defaultPath: defaultFilename || 'trip.gpx'
     })
     return result.canceled ? null : result.filePath
   })

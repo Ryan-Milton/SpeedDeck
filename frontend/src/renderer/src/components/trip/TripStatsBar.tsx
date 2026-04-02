@@ -1,11 +1,13 @@
+import { useState } from 'react'
 import { useTripViewerStore } from '../../stores/trip-viewer-store'
 import { useSettingsStore } from '../../stores/settings-store'
 import {
   convertSpeed, convertDistance, convertAltitude,
   speedUnitLabel, distanceUnitLabel, altitudeUnitLabel, formatDuration
 } from '../../lib/utils'
-import { ChevronLeft } from 'lucide-react'
-import type { Trackpoint } from '../../types/gps'
+import { GpsWebSocketClient } from '../../lib/ws-client'
+import { ChevronLeft, Download } from 'lucide-react'
+import type { Trackpoint, GpxDataMessage } from '../../types/gps'
 
 export function TripStatsBar(): React.JSX.Element {
   const trips = useTripViewerStore((s) => s.trips)
@@ -14,9 +16,41 @@ export function TripStatsBar(): React.JSX.Element {
   const closeDetail = useTripViewerStore((s) => s.closeDetail)
   const speedUnit = useSettingsStore((s) => s.speedUnit)
   const altUnit = useSettingsStore((s) => s.altitudeUnit)
+  const [exporting, setExporting] = useState(false)
 
   const trip = trips.find((t) => t.id === selectedTripId)
   const name = trip?.name || `Trip #${selectedTripId}`
+
+  const handleExport = (): void => {
+    if (!selectedTripId || exporting) return
+    setExporting(true)
+
+    const client = new GpsWebSocketClient('ws://127.0.0.1:8765')
+    client.onMessage = async (msg): Promise<void> => {
+      if (msg.type === 'gpxData') {
+        const data = msg as GpxDataMessage
+        client.disconnect()
+        try {
+          const safeName = (name).replace(/[^a-zA-Z0-9_-]/g, '_')
+          const filePath = await window.api.showSaveDialog(`${safeName}.gpx`)
+          if (filePath) {
+            await window.api.saveFile(filePath, data.gpxXml)
+          }
+        } finally {
+          setExporting(false)
+        }
+      }
+    }
+    client.onConnectionChange = (connected): void => {
+      if (connected) {
+        client.send({ type: 'command', action: 'trip_export', tripId: selectedTripId })
+      }
+    }
+    client.connect()
+
+    // Timeout safety
+    setTimeout(() => { setExporting(false); client.disconnect() }, 10000)
+  }
 
   const duration = trip?.startedAt && trip?.endedAt
     ? (new Date(trip.endedAt).getTime() - new Date(trip.startedAt).getTime()) / 1000
@@ -44,6 +78,15 @@ export function TripStatsBar(): React.JSX.Element {
       {elevGain > 0 && (
         <StatPill label="Elev" value={`+${Math.round(convertAltitude(elevGain, altUnit))}`} unit={altitudeUnitLabel(altUnit)} />
       )}
+
+      <button
+        onClick={handleExport}
+        disabled={exporting}
+        className="w-10 h-10 flex items-center justify-center text-text-secondary active:text-accent disabled:opacity-40 transition-colors"
+        title="Export GPX"
+      >
+        <Download size={20} />
+      </button>
     </div>
   )
 }

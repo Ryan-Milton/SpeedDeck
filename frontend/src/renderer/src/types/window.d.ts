@@ -4,7 +4,7 @@ declare global {
       getWsUrl: () => Promise<string>
       getBackendStatus: () => Promise<{ running: boolean }>
       toggleFullscreen: () => Promise<void>
-      showSaveDialog: () => Promise<string | null>
+      showSaveDialog: (defaultFilename?: string) => Promise<string | null>
       saveFile: (filePath: string, content: string) => Promise<void>
 
       // Tile management
