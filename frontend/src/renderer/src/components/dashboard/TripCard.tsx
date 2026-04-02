@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useGpsStore } from '../../stores/gps-store'
 import { useSettingsStore } from '../../stores/settings-store'
 import { convertDistance, distanceUnitLabel, formatDuration } from '../../lib/utils'
@@ -34,26 +34,18 @@ export function TripCard(): React.JSX.Element {
 }
 
 function SessionTimerCard(): React.JSX.Element {
-  const sessionStartRef = useRef<number | null>(null)
-  const lastUpdate = useGpsStore((s) => s.lastUpdate)
+  const sessionStart = useGpsStore((s) => s.sessionStart)
   const [elapsed, setElapsed] = useState(0)
-
-  // Record when we first got GPS data this session
-  useEffect(() => {
-    if (lastUpdate > 0 && sessionStartRef.current === null) {
-      sessionStartRef.current = Date.now()
-    }
-  }, [lastUpdate])
 
   // Tick every second
   useEffect(() => {
     const interval = setInterval(() => {
-      if (sessionStartRef.current) {
-        setElapsed(Math.floor((Date.now() - sessionStartRef.current) / 1000))
+      if (sessionStart) {
+        setElapsed(Math.floor((Date.now() - sessionStart) / 1000))
       }
     }, 1000)
     return (): void => clearInterval(interval)
-  }, [])
+  }, [sessionStart])
 
   return (
     <Card padding="sm">
