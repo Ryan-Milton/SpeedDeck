@@ -3,6 +3,7 @@ import { useNavigationStore } from '../../stores/navigation-store'
 import { cn, speedUnitLabel, altitudeUnitLabel } from '../../lib/utils'
 import { X } from 'lucide-react'
 import { GpsWebSocketClient } from '../../lib/ws-client'
+import { ConfirmDialog } from '../shared/ConfirmDialog'
 import type { SpeedUnit, AltitudeUnit } from '../../types/gps'
 import { useEffect, useState } from 'react'
 
@@ -116,6 +117,7 @@ function MapTilesSection(): React.JSX.Element {
   const setShowTileDownload = useSettingsStore((s) => s.setShowTileDownload)
   const [tilesExist, setTilesExist] = useState(false)
   const [cacheSize, setCacheSize] = useState(0)
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   useEffect(() => {
     window.api.checkTilesExist().then(setTilesExist).catch(() => {})
@@ -123,6 +125,7 @@ function MapTilesSection(): React.JSX.Element {
   }, [])
 
   const handleDelete = async (): Promise<void> => {
+    setConfirmDelete(false)
     await window.api.deleteCachedTiles()
     setTilesExist(false)
     setCacheSize(0)
@@ -146,13 +149,22 @@ function MapTilesSection(): React.JSX.Element {
         </button>
         {tilesExist && (
           <button
-            onClick={handleDelete}
+            onClick={() => setConfirmDelete(true)}
             className="px-4 h-12 rounded-2xl text-sm font-semibold bg-surface-card text-danger active:bg-surface-active transition-colors"
           >
             Delete
           </button>
         )}
       </div>
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Delete Map Tiles"
+        message={`This will remove ${cacheMB} MB of cached map tiles. You'll need to re-download them for offline use.`}
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </div>
   )
 }
@@ -161,6 +173,7 @@ function NavDataSection(): React.JSX.Element {
   const setShowRoutingDownload = useSettingsStore((s) => s.setShowRoutingDownload)
   const osrmReady = useNavigationStore((s) => s.osrmReady)
   const [navStatus, setNavStatus] = useState<{ installedRegion: { regionName: string } | null; installedSizeMb: number; routerRunning: boolean } | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   // Query backend for actual OSRM status on mount
   useEffect(() => {
@@ -186,6 +199,23 @@ function NavDataSection(): React.JSX.Element {
   const regionName = navStatus?.installedRegion?.regionName ?? ''
   const sizeMb = navStatus?.installedSizeMb ?? 0
 
+  const handleDelete = (): void => {
+    setConfirmDelete(false)
+    const client = new GpsWebSocketClient('ws://127.0.0.1:8765')
+    client.onMessage = (msg): void => {
+      const data = msg as Record<string, unknown>
+      if (data.type === 'navStatus') {
+        setNavStatus(data as typeof navStatus)
+        useNavigationStore.getState().setOsrmReady(false)
+        client.disconnect()
+      }
+    }
+    client.onConnectionChange = (connected): void => {
+      if (connected) client.send({ type: 'command', action: 'nav_delete_region' })
+    }
+    client.connect()
+  }
+
   return (
     <div className="space-y-3">
       <span className="text-[13px] font-semibold tracking-wide uppercase text-text-secondary">Navigation Data</span>
@@ -201,27 +231,22 @@ function NavDataSection(): React.JSX.Element {
         </button>
         {hasData && (
           <button
-            onClick={() => {
-              const client = new GpsWebSocketClient('ws://127.0.0.1:8765')
-              client.onMessage = (msg): void => {
-                const data = msg as Record<string, unknown>
-                if (data.type === 'navStatus') {
-                  setNavStatus(data as typeof navStatus)
-                  useNavigationStore.getState().setOsrmReady(false)
-                  client.disconnect()
-                }
-              }
-              client.onConnectionChange = (connected): void => {
-                if (connected) client.send({ type: 'command', action: 'nav_delete_region' })
-              }
-              client.connect()
-            }}
+            onClick={() => setConfirmDelete(true)}
             className="px-4 h-12 rounded-2xl text-sm font-semibold bg-surface-card text-danger active:bg-surface-active transition-colors"
           >
             Delete
           </button>
         )}
       </div>
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Delete Navigation Data"
+        message={`This will remove ${regionName} routing data (${sizeMb} MB). Navigation will be unavailable until you download a new region.`}
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </div>
   )
 }

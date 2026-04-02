@@ -1,10 +1,11 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import { GpsWebSocketClient } from '../../lib/ws-client'
 import { useTripViewerStore } from '../../stores/trip-viewer-store'
 import { useSettingsStore } from '../../stores/settings-store'
 import { useGpsStore } from '../../stores/gps-store'
 import { convertSpeed, convertDistance, speedUnitLabel, distanceUnitLabel, formatDuration } from '../../lib/utils'
 import { Card } from '../shared/Card'
+import { ConfirmDialog } from '../shared/ConfirmDialog'
 import type { TripListMessage, TrackpointsDataMessage } from '../../types/gps'
 
 export function TripsView(): React.JSX.Element {
@@ -16,6 +17,7 @@ export function TripsView(): React.JSX.Element {
   const setTrackpoints = useTripViewerStore((s) => s.setTrackpoints)
   const unit = useSettingsStore((s) => s.speedUnit)
   const tripStatus = useGpsStore((s) => s.tripStatus)
+  const [confirmStop, setConfirmStop] = useState(false)
 
   const wsRef = useRef<GpsWebSocketClient | null>(null)
 
@@ -55,9 +57,14 @@ export function TripsView(): React.JSX.Element {
     if (tripStatus === 'idle') {
       sendCommand('trip_start')
     } else {
-      sendCommand('trip_stop')
+      setConfirmStop(true)
     }
   }, [tripStatus, sendCommand])
+
+  const handleConfirmStop = useCallback(() => {
+    setConfirmStop(false)
+    sendCommand('trip_stop')
+  }, [sendCommand])
 
   const formatDate = (iso: string): string => {
     try {
@@ -121,6 +128,16 @@ export function TripsView(): React.JSX.Element {
           </Card>
         ))}
       </div>
+
+      <ConfirmDialog
+        open={confirmStop}
+        title="Stop Trip Recording"
+        message="Are you sure you want to stop recording? The trip will be saved."
+        confirmLabel="Stop"
+        variant="danger"
+        onConfirm={handleConfirmStop}
+        onCancel={() => setConfirmStop(false)}
+      />
     </div>
   )
 }
