@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useTripViewerStore } from '../../stores/trip-viewer-store'
 import { useSettingsStore } from '../../stores/settings-store'
 import {
@@ -17,6 +17,7 @@ export function TripStatsBar(): React.JSX.Element {
   const speedUnit = useSettingsStore((s) => s.speedUnit)
   const altUnit = useSettingsStore((s) => s.altitudeUnit)
   const [exporting, setExporting] = useState(false)
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const trip = trips.find((t) => t.id === selectedTripId)
   const name = trip?.name || `Trip #${selectedTripId}`
@@ -29,6 +30,7 @@ export function TripStatsBar(): React.JSX.Element {
     client.onMessage = async (msg): Promise<void> => {
       if (msg.type === 'gpxData') {
         const data = msg as GpxDataMessage
+        if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null }
         client.disconnect()
         try {
           const safeName = (name).replace(/[^a-zA-Z0-9_-]/g, '_')
@@ -49,7 +51,7 @@ export function TripStatsBar(): React.JSX.Element {
     client.connect()
 
     // Timeout safety
-    setTimeout(() => { setExporting(false); client.disconnect() }, 10000)
+    timeoutRef.current = setTimeout(() => { setExporting(false); client.disconnect() }, 10000)
   }
 
   const duration = trip?.startedAt && trip?.endedAt
