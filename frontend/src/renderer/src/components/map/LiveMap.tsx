@@ -20,6 +20,7 @@ export function LiveMap(): React.JSX.Element {
   const trailDirtyRef = useRef(false)
   const mapReadyRef = useRef(false)
   const onlineStyleRef = useRef(false) // true once we've switched to Carto
+  const lastHeadingRef = useRef<number | null>(null) // last known GPS heading
 
   // Initialize map once
   useEffect(() => {
@@ -209,6 +210,9 @@ export function LiveMap(): React.JSX.Element {
       // Only update if position actually changed
       if (prevFix && fix.latitude === prevFix.latitude && fix.longitude === prevFix.longitude) return
 
+      // Store latest heading so orientation toggle can apply it immediately when stationary
+      lastHeadingRef.current = fix.heading
+
       // Update vehicle dot position
       const vehicleSrc = map.getSource('vehicle') as maplibregl.GeoJSONSource | undefined
       vehicleSrc?.setData({
@@ -286,36 +290,40 @@ export function LiveMap(): React.JSX.Element {
     return unsub
   }, [])
 
-  // React to orientation toggle immediately (even when stationary)
+  // React to orientation toggle immediately (even when stationary).
+  // Uses vanilla subscribe form (state, prev) => void — no subscribeWithSelector middleware needed.
   useEffect(() => {
-    return useSettingsStore.subscribe(
-      (s) => s.mapOrientation,
-      (orientation) => {
-        const map = mapRef.current
-        if (!map || !mapReadyRef.current) return
-        const fix = useGpsStore.getState().fix
-        if (!fix) return
-        if (orientation === 'north-up') {
-          map.easeTo({
-            center: [fix.longitude, fix.latitude],
-            bearing: 0,
-            pitch: 0,
-            padding: { top: 0, bottom: 0, left: 0, right: 0 },
-            duration: 300,
-            easing: (t) => t
-          })
-        } else {
-          map.easeTo({
-            center: [fix.longitude, fix.latitude],
-            bearing: fix.heading,
-            pitch: DRIVING_PITCH,
-            padding: CAMERA_PADDING,
-            duration: 300,
-            easing: (t) => t
-          })
-        }
+    return useSettingsStore.subscribe((state, prev) => {
+      if (state.mapOrientation === prev.mapOrientation) return
+      const map = mapRef.current
+      if (!map || !mapReadyRef.current) return
+      const fix = useGpsStore.getState().fix
+      // Fall back to lastHeadingRef when fix is available but position hasn't changed yet
+      const heading = fix?.heading ?? lastHeadingRef.current ?? 0
+      const center: [number, number] | undefined = fix
+        ? [fix.longitude, fix.latitude]
+        : undefined
+      if (!center) return
+      if (state.mapOrientation === 'north-up') {
+        map.easeTo({
+          center,
+          bearing: 0,
+          pitch: 0,
+          padding: { top: 0, bottom: 0, left: 0, right: 0 },
+          duration: 300,
+          easing: (t) => t
+        })
+      } else {
+        map.easeTo({
+          center,
+          bearing: heading,
+          pitch: DRIVING_PITCH,
+          padding: CAMERA_PADDING,
+          duration: 300,
+          easing: (t) => t
+        })
       }
-    )
+    })
   }, [])
 
   // Subscribe to navigation route changes
