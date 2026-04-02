@@ -119,9 +119,10 @@ export const useNavigationStore = create<NavigationState>()((set, get) => ({
     } else {
       cachedStepRanges = []
     }
+    const wasNavigating = get().status === 'navigating'
     set({
       route,
-      status: route ? 'previewing' : 'idle',
+      status: route ? (wasNavigating ? 'navigating' : 'previewing') : 'idle',
       activeStepIndex: 0,
       distanceToNextManeuver: 0,
       distanceRemaining: route?.distance ?? 0,
@@ -129,8 +130,9 @@ export const useNavigationStore = create<NavigationState>()((set, get) => ({
       isOffRoute: false,
       offRouteScore: 0,
       offRouteTimestamp: null,
-      navigationStartTime: null,
+      navigationStartTime: wasNavigating ? Date.now() : null,
       currentSpeedLimit: null,
+      currentStreetName: wasNavigating ? (route?.steps[0]?.name ?? '') : '',
     })
   },
 
