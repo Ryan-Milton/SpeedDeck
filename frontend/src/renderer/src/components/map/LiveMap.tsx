@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { useGpsStore } from '../../stores/gps-store'
+import { useSettingsStore } from '../../stores/settings-store'
 import { useNavigationStore } from '../../stores/navigation-store'
 import { resolveMapStyle, checkOnlineStyle, speedToColor } from '../../lib/map-style'
 
@@ -216,15 +217,27 @@ export function LiveMap(): React.JSX.Element {
         properties: {}
       })
 
-      // Camera follow: heading-up, pitched, vehicle near bottom
-      map.easeTo({
-        center: [fix.longitude, fix.latitude],
-        bearing: fix.heading,
-        pitch: DRIVING_PITCH,
-        padding: CAMERA_PADDING,
-        duration: 200,
-        easing: (t) => t
-      })
+      // Camera follow: heading-up (pitched, vehicle near bottom) or north-up (flat, centered)
+      const orientation = useSettingsStore.getState().mapOrientation
+      if (orientation === 'north-up') {
+        map.easeTo({
+          center: [fix.longitude, fix.latitude],
+          bearing: 0,
+          pitch: 0,
+          padding: { top: 0, bottom: 0, left: 0, right: 0 },
+          duration: 200,
+          easing: (t) => t
+        })
+      } else {
+        map.easeTo({
+          center: [fix.longitude, fix.latitude],
+          bearing: fix.heading,
+          pitch: DRIVING_PITCH,
+          padding: CAMERA_PADDING,
+          duration: 200,
+          easing: (t) => t
+        })
+      }
 
       // Breadcrumb trail (only during recording)
       if (tripStatus === 'recording') {
