@@ -12,6 +12,7 @@ const CAMERA_PADDING = { top: 300, bottom: 0, left: 0, right: 0 }
 const TRAIL_DOWNSAMPLE = 10 // only add a trail point every N GPS updates (~1Hz at 10Hz)
 
 export function LiveMap(): React.JSX.Element {
+  const mapOrientation = useSettingsStore((s) => s.mapOrientation)
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
   const trailCoordsRef = useRef<number[][]>([])
@@ -290,41 +291,36 @@ export function LiveMap(): React.JSX.Element {
     return unsub
   }, [])
 
-  // React to orientation toggle immediately (even when stationary).
-  // Uses vanilla subscribe form (state, prev) => void — no subscribeWithSelector middleware needed.
+  // React to orientation toggle immediately (even when stationary)
   useEffect(() => {
-    return useSettingsStore.subscribe((state, prev) => {
-      if (state.mapOrientation === prev.mapOrientation) return
-      const map = mapRef.current
-      if (!map || !mapReadyRef.current) return
-      const fix = useGpsStore.getState().fix
-      // Fall back to lastHeadingRef when fix is available but position hasn't changed yet
-      const heading = fix?.heading ?? lastHeadingRef.current ?? 0
-      const center: [number, number] | undefined = fix
-        ? [fix.longitude, fix.latitude]
-        : undefined
-      if (!center) return
-      if (state.mapOrientation === 'north-up') {
-        map.easeTo({
-          center,
-          bearing: 0,
-          pitch: 0,
-          padding: { top: 0, bottom: 0, left: 0, right: 0 },
-          duration: 300,
-          easing: (t) => t
-        })
-      } else {
-        map.easeTo({
-          center,
-          bearing: heading,
-          pitch: DRIVING_PITCH,
-          padding: CAMERA_PADDING,
-          duration: 300,
-          easing: (t) => t
-        })
-      }
-    })
-  }, [])
+    const map = mapRef.current
+    if (!map || !mapReadyRef.current) return
+    const fix = useGpsStore.getState().fix
+    const heading = fix?.heading ?? lastHeadingRef.current ?? 0
+    const center: [number, number] | undefined = fix
+      ? [fix.longitude, fix.latitude]
+      : undefined
+    if (!center) return
+    if (mapOrientation === 'north-up') {
+      map.easeTo({
+        center,
+        bearing: 0,
+        pitch: 0,
+        padding: { top: 0, bottom: 0, left: 0, right: 0 },
+        duration: 300,
+        easing: (t) => t
+      })
+    } else {
+      map.easeTo({
+        center,
+        bearing: heading,
+        pitch: DRIVING_PITCH,
+        padding: CAMERA_PADDING,
+        duration: 300,
+        easing: (t) => t
+      })
+    }
+  }, [mapOrientation])
 
   // Subscribe to navigation route changes
   // Subscribe to navigation route and status changes
