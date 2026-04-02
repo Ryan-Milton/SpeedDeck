@@ -39,22 +39,28 @@ async def calculate_route(
         # First waypoint constrained; second (destination) unconstrained
         bearing_param = f"&bearings={bearing_int},{br};"
 
-    base_url = (
-        f"http://127.0.0.1:{port}/route/v1/driving/"
-        f"{from_lon},{from_lat};{to_lon},{to_lat}"
-        f"?steps=true&geometries=geojson&overview=full&annotations=duration,distance,maxspeed"
-    )
-    url = base_url + bearing_param
+    base_params = "?steps=true&geometries=geojson&overview=full"
+    coords = f"{from_lon},{from_lat};{to_lon},{to_lat}"
+    base_prefix = f"http://127.0.0.1:{port}/route/v1/driving/{coords}"
 
     log.info("Calculating route: (%f,%f) -> (%f,%f)%s",
              from_lat, from_lon, to_lat, to_lon,
              f" bearing={round(heading) % 360}±{_bearing_range(speed)}" if bearing_param else "")
 
     async with aiohttp.ClientSession() as session:
-        async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-            if resp.status != 200:
-                raise RuntimeError(f"OSRM request failed: HTTP {resp.status}")
-            data = await resp.json()
+        # Try with maxspeed annotations first, fall back to without if OSRM doesn't support it
+        for annotations in ("duration,distance,maxspeed", "duration,distance"):
+            base_url = f"{base_prefix}{base_params}&annotations={annotations}"
+            url = base_url + bearing_param
+
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status == 400 and "maxspeed" in annotations:
+                    log.warning("OSRM does not support maxspeed annotations; retrying without")
+                    continue
+                if resp.status != 200:
+                    raise RuntimeError(f"OSRM request failed: HTTP {resp.status}")
+                data = await resp.json()
+            break
 
         # Fallback: retry without bearing constraint if OSRM found no route
         if (data.get("code") != "Ok" or not data.get("routes")) and bearing_param:
