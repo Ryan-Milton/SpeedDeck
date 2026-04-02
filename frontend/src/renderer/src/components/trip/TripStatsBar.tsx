@@ -1,13 +1,14 @@
-import { useState, useRef, useEffect } from 'react'
-import { useTripViewerStore } from '../../stores/trip-viewer-store'
-import { useSettingsStore } from '../../stores/settings-store'
+import { useState, useRef, useEffect } from "react"
+import { useTripViewerStore } from "../../stores/trip-viewer-store"
+import { useSettingsStore } from "../../stores/settings-store"
 import {
   convertSpeed, convertDistance, convertAltitude,
   speedUnitLabel, distanceUnitLabel, altitudeUnitLabel, formatDuration
-} from '../../lib/utils'
-import { GpsWebSocketClient } from '../../lib/ws-client'
-import { ChevronLeft, Pencil } from 'lucide-react'
-import type { Trackpoint } from '../../types/gps'
+} from "../../lib/utils"
+import { GpsWebSocketClient } from "../../lib/ws-client"
+import { GPS_WS_URL } from "../../lib/constants"
+import { ChevronLeft, Pencil } from "lucide-react"
+import type { Trackpoint } from "../../types/gps"
 
 export function TripStatsBar(): React.JSX.Element {
   const trips = useTripViewerStore((s) => s.trips)
@@ -24,8 +25,14 @@ export function TripStatsBar(): React.JSX.Element {
   const [editing, setEditing] = useState(false)
   const [editValue, setEditValue] = useState(name)
   const inputRef = useRef<HTMLInputElement>(null)
-  const pendingSave = useRef(false)
-  const cancelRef = useRef(false)
+
+  // isSavingRef: true while Enter-triggered save is in progress.
+  // Prevents the onBlur that fires on input unmount from re-entering performRename.
+  const isSavingRef = useRef(false)
+  // isCanceledRef: set to true by the Escape handler so onBlur does not commit the rename.
+  const isCanceledRef = useRef(false)
+  // wsClientRef: holds the active rename WS client so it can be cleaned up on unmount.
+  const wsClientRef = useRef<GpsWebSocketClient | null>(null)
 
   useEffect(() => {
     if (editing) {
@@ -34,28 +41,55 @@ export function TripStatsBar(): React.JSX.Element {
     }
   }, [editing, name])
 
-  const handleRename = (): void => {
-    if (pendingSave.current || cancelRef.current) {
-      cancelRef.current = false
-      return
+  // Disconnect any in-flight WS rename client when the component unmounts
+  useEffect(() => {
+    return (): void => {
+      wsClientRef.current?.disconnect()
+      wsClientRef.current = null
     }
-    pendingSave.current = true
+  }, [])
+
+  /** Commits the rename to the backend. Called by Enter and by onBlur (when neither
+   *  isSavingRef nor isCanceledRef are set). */
+  const performRename = (): void => {
     const trimmed = editValue.trim()
     setEditing(false)
-    pendingSave.current = false
-    if (!trimmed || trimmed === name || !selectedTripId) return
 
-    // Send rename command to backend
-    const client = new GpsWebSocketClient('ws://127.0.0.1:8765')
+    if (!trimmed || trimmed === name || !selectedTripId) {
+      isSavingRef.current = false
+      return
+    }
+
+    // Disconnect any previous in-flight client before starting a new one
+    wsClientRef.current?.disconnect()
+
+    const client = new GpsWebSocketClient(GPS_WS_URL)
+    wsClientRef.current = client
+
     client.onConnectionChange = (connected): void => {
       if (connected) {
-        client.send({ type: 'command', action: 'trip_rename', tripId: selectedTripId, name: trimmed })
+        client.send({ type: "command", action: "trip_rename", tripId: selectedTripId, name: trimmed })
         // Update local state immediately
         setTrips(trips.map((t) => t.id === selectedTripId ? { ...t, name: trimmed } : t))
         client.disconnect()
+        wsClientRef.current = null
       }
+      // Reset after the async operation completes (success or connection failure)
+      isSavingRef.current = false
     }
+
     client.connect()
+  }
+
+  /** onBlur handler - guards against double-fire from input unmount. */
+  const handleBlur = (): void => {
+    // isSavingRef: Enter already triggered performRename; skip this blur-induced call.
+    // isCanceledRef: Escape was pressed; never commit the rename.
+    if (isSavingRef.current || isCanceledRef.current) {
+      isCanceledRef.current = false
+      return
+    }
+    performRename()
   }
 
   const duration = trip?.startedAt && trip?.endedAt
@@ -78,10 +112,21 @@ export function TripStatsBar(): React.JSX.Element {
           ref={inputRef}
           value={editValue}
           onChange={(e) => setEditValue(e.target.value)}
-          onBlur={handleRename}
+          onBlur={handleBlur}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') handleRename()
-            if (e.key === 'Escape') { cancelRef.current = true; setEditing(false) }
+            if (e.key === "Enter") {
+              // Set isSavingRef BEFORE performRename so the onBlur that fires when
+              // the input unmounts (due to setEditing(false) inside performRename)
+              // sees the flag as true and skips the duplicate save.
+              isSavingRef.current = true
+              performRename()
+            }
+            if (e.key === "Escape") {
+              // Set isCanceledRef BEFORE setEditing(false) so the onBlur that fires
+              // on unmount does not commit the rename.
+              isCanceledRef.current = true
+              setEditing(false)
+            }
           }}
           className="text-lg font-semibold text-text-primary bg-surface-card rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-accent max-w-[200px]"
         />
