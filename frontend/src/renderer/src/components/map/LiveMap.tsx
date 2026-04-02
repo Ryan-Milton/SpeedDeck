@@ -286,6 +286,38 @@ export function LiveMap(): React.JSX.Element {
     return unsub
   }, [])
 
+  // React to orientation toggle immediately (even when stationary)
+  useEffect(() => {
+    return useSettingsStore.subscribe(
+      (s) => s.mapOrientation,
+      (orientation) => {
+        const map = mapRef.current
+        if (!map || !mapReadyRef.current) return
+        const fix = useGpsStore.getState().fix
+        if (!fix) return
+        if (orientation === 'north-up') {
+          map.easeTo({
+            center: [fix.longitude, fix.latitude],
+            bearing: 0,
+            pitch: 0,
+            padding: { top: 0, bottom: 0, left: 0, right: 0 },
+            duration: 300,
+            easing: (t) => t
+          })
+        } else {
+          map.easeTo({
+            center: [fix.longitude, fix.latitude],
+            bearing: fix.heading,
+            pitch: DRIVING_PITCH,
+            padding: CAMERA_PADDING,
+            duration: 300,
+            easing: (t) => t
+          })
+        }
+      }
+    )
+  }, [])
+
   // Subscribe to navigation route changes
   // Subscribe to navigation route and status changes
   useEffect(() => {
