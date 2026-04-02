@@ -31,7 +31,14 @@ export function ToastContainer(): React.JSX.Element {
 
   useEffect(() => {
     const handler = (msg: ToastMessage): void => {
-      setToasts((prev) => [...prev.slice(-4), msg]) // keep max 5
+      setToasts((prev) => {
+        if (prev.length >= 5) {
+          const evicted = prev[0]
+          const t = timersRef.current.get(evicted.id)
+          if (t) { clearTimeout(t); timersRef.current.delete(evicted.id) }
+        }
+        return [...prev.slice(-4), msg]
+      })
       if (msg.duration && msg.duration > 0) {
         const timer = setTimeout(() => dismiss(msg.id), msg.duration)
         timersRef.current.set(msg.id, timer)

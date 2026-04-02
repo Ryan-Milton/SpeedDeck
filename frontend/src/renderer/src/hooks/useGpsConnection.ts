@@ -43,6 +43,7 @@ export function useGpsConnection(): void {
         if (hadFixRef.current) {
           showToast('GPS connection lost', 'danger', 5000)
         }
+        prevFixQualityRef.current = 0
       }
     }
 
