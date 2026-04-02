@@ -13,7 +13,7 @@ export function useGpsConnection(): void {
   const graphCounterRef = useRef(0)
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const hadFixRef = useRef(false)
-  const prevFixQualityRef = useRef(0)
+  const prevFixQualityRef = useRef<number | null>(null)
 
   useEffect(() => {
     const client = new GpsWebSocketClient(WS_URL)
@@ -43,7 +43,10 @@ export function useGpsConnection(): void {
         if (hadFixRef.current) {
           showToast('GPS connection lost', 'danger', 5000)
         }
-        prevFixQualityRef.current = 0
+        // Reset to null so the first message after reconnection is treated as
+        // initial state rather than a quality transition, preventing false
+        // "GPS signal lost" toasts when the GPS is reacquiring a lock.
+        prevFixQualityRef.current = null
       }
     }
 
@@ -64,7 +67,7 @@ export function useGpsConnection(): void {
         if (fixQuality > 0 && prevQuality === 0 && hadFixRef.current) {
           // Signal regained after loss
           showToast('GPS signal restored', 'success', 3000)
-        } else if (fixQuality === 0 && prevQuality > 0) {
+        } else if (fixQuality === 0 && prevQuality !== null && prevQuality > 0) {
           // Signal lost
           showToast('GPS signal lost — waiting for fix', 'warning', 5000)
         } else if (fixQuality > 0 && !hadFixRef.current) {
@@ -73,7 +76,6 @@ export function useGpsConnection(): void {
           hadFixRef.current = true
         }
 
-        if (fixQuality > 0) hadFixRef.current = true
         prevFixQualityRef.current = fixQuality
 
         // Downsample to 1Hz for the history graph
