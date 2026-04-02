@@ -187,7 +187,10 @@ export function computeOffRouteScore(opts: {
     headingScore = Math.min(headingDivergence / headingTolerance, 1)
   }
 
-  const score = 0.5 * distanceScore + 0.5 * headingScore
+  // Raise distance weight when heading is unreliable (low speed)
+  const distanceWeight = speed < 2.0 ? 1.0 : 0.5
+  const headingWeight = speed < 2.0 ? 0.0 : 0.5
+  const score = distanceWeight * distanceScore + headingWeight * headingScore
 
   return { score, distanceScore, headingScore, effectiveThreshold }
 }

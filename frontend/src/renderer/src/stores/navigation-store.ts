@@ -234,8 +234,8 @@ export const useNavigationStore = create<NavigationState>()((set, get) => ({
     const { navigationStartTime } = get()
     const distTraveled = totalDist - distFromHere
 
-    if (navigationStartTime !== null && distTraveled > 100 && (Date.now() - navigationStartTime) > 30_000) {
-      const actualElapsedSec = (Date.now() - navigationStartTime) / 1000
+    if (navigationStartTime !== null && distTraveled > 100 && (now - navigationStartTime) > 30_000) {
+      const actualElapsedSec = (now - navigationStartTime) / 1000
       const osrmExpectedForTraveled = route.duration * (distTraveled / totalDist)
       if (osrmExpectedForTraveled > 0) {
         const paceFactor = Math.max(0.5, Math.min(3.0, actualElapsedSec / osrmExpectedForTraveled))

@@ -53,7 +53,7 @@ export function distanceUnitLabel(unit: string): string {
  */
 export function formatNavDistance(meters: number, unit: string): string {
   if (unit === 'mph') {
-    // Imperial: use feet under ~0.1 mi (528 ft / 160m), miles above
+    // Imperial: use feet under ~0.1 mi (~525 ft / 160m), miles above
     if (meters < 160) return `${Math.round(meters * METERS_TO_FEET)} ft`
     return `${(meters * METERS_TO_MI).toFixed(1)} mi`
   }
