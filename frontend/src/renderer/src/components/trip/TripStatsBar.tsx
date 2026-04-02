@@ -17,7 +17,9 @@ export function TripStatsBar(): React.JSX.Element {
   const speedUnit = useSettingsStore((s) => s.speedUnit)
   const altUnit = useSettingsStore((s) => s.altitudeUnit)
   const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hasRequestedExportRef = useRef(false)
 
   const trip = trips.find((t) => t.id === selectedTripId)
   const name = trip?.name || `Trip #${selectedTripId}`
@@ -25,11 +27,14 @@ export function TripStatsBar(): React.JSX.Element {
   const handleExport = (): void => {
     if (!selectedTripId || exporting) return
     setExporting(true)
+    setExportError(null)
+    hasRequestedExportRef.current = false
 
     const client = new GpsWebSocketClient('ws://127.0.0.1:8765')
     client.onMessage = async (msg): Promise<void> => {
       if (msg.type === 'gpxData') {
         const data = msg as GpxDataMessage
+        if (data.tripId !== selectedTripId) return
         if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null }
         client.disconnect()
         try {
@@ -38,13 +43,17 @@ export function TripStatsBar(): React.JSX.Element {
           if (filePath) {
             await window.api.saveFile(filePath, data.gpxXml)
           }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
+          setExportError(`Export failed: ${message}`)
         } finally {
           setExporting(false)
         }
       }
     }
     client.onConnectionChange = (connected): void => {
-      if (connected) {
+      if (connected && !hasRequestedExportRef.current) {
+        hasRequestedExportRef.current = true
         client.send({ type: 'command', action: 'trip_export', tripId: selectedTripId })
       }
     }
@@ -61,34 +70,41 @@ export function TripStatsBar(): React.JSX.Element {
   const { elevGain } = computeElevation(trackpoints)
 
   return (
-    <div className="flex items-center h-14 px-4 border-b border-separator bg-surface gap-4">
-      <button
-        onClick={closeDetail}
-        className="w-10 h-10 flex items-center justify-center text-text-secondary active:text-accent transition-colors"
-      >
-        <ChevronLeft size={24} />
-      </button>
+    <div className="flex flex-col">
+      <div className="flex items-center h-14 px-4 border-b border-separator bg-surface gap-4">
+        <button
+          onClick={closeDetail}
+          className="w-10 h-10 flex items-center justify-center text-text-secondary active:text-accent transition-colors"
+        >
+          <ChevronLeft size={24} />
+        </button>
 
-      <span className="text-lg font-semibold text-text-primary truncate">{name}</span>
+        <span className="text-lg font-semibold text-text-primary truncate">{name}</span>
 
-      <div className="flex-1" />
+        <div className="flex-1" />
 
-      <StatPill label="Dist" value={convertDistance(trip?.distanceM ?? 0, speedUnit).toFixed(1)} unit={distanceUnitLabel(speedUnit)} />
-      <StatPill label="Time" value={formatDuration(duration)} />
-      <StatPill label="Max" value={String(Math.round(convertSpeed(trip?.maxSpeed ?? 0, speedUnit)))} unit={speedUnitLabel(speedUnit)} />
-      <StatPill label="Avg" value={String(Math.round(convertSpeed(trip?.avgSpeed ?? 0, speedUnit)))} unit={speedUnitLabel(speedUnit)} />
-      {elevGain > 0 && (
-        <StatPill label="Elev" value={`+${Math.round(convertAltitude(elevGain, altUnit))}`} unit={altitudeUnitLabel(altUnit)} />
+        <StatPill label="Dist" value={convertDistance(trip?.distanceM ?? 0, speedUnit).toFixed(1)} unit={distanceUnitLabel(speedUnit)} />
+        <StatPill label="Time" value={formatDuration(duration)} />
+        <StatPill label="Max" value={String(Math.round(convertSpeed(trip?.maxSpeed ?? 0, speedUnit)))} unit={speedUnitLabel(speedUnit)} />
+        <StatPill label="Avg" value={String(Math.round(convertSpeed(trip?.avgSpeed ?? 0, speedUnit)))} unit={speedUnitLabel(speedUnit)} />
+        {elevGain > 0 && (
+          <StatPill label="Elev" value={`+${Math.round(convertAltitude(elevGain, altUnit))}`} unit={altitudeUnitLabel(altUnit)} />
+        )}
+
+        <button
+          onClick={handleExport}
+          disabled={exporting}
+          className="w-10 h-10 flex items-center justify-center text-text-secondary active:text-accent disabled:opacity-40 transition-colors"
+          title="Export GPX"
+        >
+          <Download size={20} />
+        </button>
+      </div>
+      {exportError && (
+        <div className="px-4 py-1 text-xs text-red-500 bg-surface border-b border-separator">
+          {exportError}
+        </div>
       )}
-
-      <button
-        onClick={handleExport}
-        disabled={exporting}
-        className="w-10 h-10 flex items-center justify-center text-text-secondary active:text-accent disabled:opacity-40 transition-colors"
-        title="Export GPX"
-      >
-        <Download size={20} />
-      </button>
     </div>
   )
 }
