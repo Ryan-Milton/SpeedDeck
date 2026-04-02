@@ -28,6 +28,7 @@ export interface RouteData {
   distance: number // total meters
   duration: number // total seconds
   steps: RouteStep[]
+  maxspeeds?: (number | null)[] // per-segment speed limits in km/h, null = unknown
 }
 
 export interface GeocodeResultsMessage {

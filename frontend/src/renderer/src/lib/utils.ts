@@ -46,6 +46,27 @@ export function distanceUnitLabel(unit: string): string {
   return 'M'
 }
 
+/**
+ * Format a short navigation distance (e.g. distance to next turn).
+ * Uses feet for imperial, meters for metric/nautical when under the threshold
+ * for switching to the larger unit (miles/km/nm).
+ */
+export function formatNavDistance(meters: number, unit: string): string {
+  if (unit === 'mph') {
+    // Imperial: use feet under ~0.1 mi (528 ft / 160m), miles above
+    if (meters < 160) return `${Math.round(meters * METERS_TO_FEET)} ft`
+    return `${(meters * METERS_TO_MI).toFixed(1)} mi`
+  }
+  if (unit === 'kmh') {
+    // Metric: use meters under 1km
+    if (meters < 1000) return `${Math.round(meters)} m`
+    return `${(meters * METERS_TO_KM).toFixed(1)} km`
+  }
+  // Knots/nautical: use meters under 0.1 nm (~185m)
+  if (meters < 185) return `${Math.round(meters)} m`
+  return `${(meters * METERS_TO_NM).toFixed(1)} nm`
+}
+
 export function altitudeUnitLabel(unit: string): string {
   if (unit === 'ft') return 'FT'
   return 'M'

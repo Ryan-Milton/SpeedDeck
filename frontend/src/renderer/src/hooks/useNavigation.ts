@@ -5,7 +5,15 @@ import { useNavigationStore } from '../stores/navigation-store'
 import type { GeocodeResultsMessage, RouteDataMessage, NavStatusMessage } from '../types/navigation'
 
 const WS_URL = 'ws://127.0.0.1:8765'
-const REROUTE_DELAY_MS = 3000
+const MIN_REROUTE_DELAY_MS = 1500
+const MAX_REROUTE_DELAY_MS = 4000
+const REROUTE_DISTANCE_M = 40
+
+function computeRerouteDelay(speedMps: number): number {
+  if (speedMps < 1) return MAX_REROUTE_DELAY_MS
+  const timeMs = (REROUTE_DISTANCE_M / speedMps) * 1000
+  return Math.max(MIN_REROUTE_DELAY_MS, Math.min(MAX_REROUTE_DELAY_MS, timeMs))
+}
 
 export function useNavigation(): void {
   const wsRef = useRef<GpsWebSocketClient | null>(null)
@@ -59,7 +67,8 @@ export function useNavigation(): void {
         state.fix.latitude,
         state.fix.longitude,
         state.fix.heading,
-        state.smoothedSpeed
+        state.smoothedSpeed,
+        state.fix.hdop
       )
     })
 
@@ -70,12 +79,15 @@ export function useNavigation(): void {
   useEffect(() => {
     const unsub = useNavigationStore.subscribe((state, prev) => {
       if (state.isOffRoute && !prev.isOffRoute) {
-        // Start reroute timer
+        // Start reroute timer with speed-adaptive delay
+        const currentSpeed = useGpsStore.getState().smoothedSpeed
+        const delayMs = computeRerouteDelay(currentSpeed)
+
         rerouteTimerRef.current = setTimeout(() => {
           const nav = useNavigationStore.getState()
           const gps = useGpsStore.getState()
           if (nav.isOffRoute && nav.destination && gps.fix) {
-            // Reroute
+            // Reroute with current heading and speed for bearing-aware routing
             nav.setIsCalculating(true)
             wsRef.current?.send({
               type: 'command',
@@ -84,9 +96,11 @@ export function useNavigation(): void {
               fromLat: gps.fix.latitude,
               toLon: nav.destination.longitude,
               toLat: nav.destination.latitude,
+              heading: gps.fix.heading,
+              speed: gps.smoothedSpeed,
             })
           }
-        }, REROUTE_DELAY_MS)
+        }, delayMs)
       } else if (!state.isOffRoute && prev.isOffRoute) {
         // Clear reroute timer
         if (rerouteTimerRef.current) {
@@ -115,15 +129,21 @@ export function sendGeocodeSearch(client: GpsWebSocketClient, query: string, lat
 
 /**
  * Send a route calculation request via the navigation WebSocket.
+ * Optional heading/speed enable bearing-constrained routing (for reroutes).
  */
 export function sendCalculateRoute(
   client: GpsWebSocketClient,
   fromLon: number, fromLat: number,
-  toLon: number, toLat: number
+  toLon: number, toLat: number,
+  heading?: number,
+  speed?: number,
 ): void {
-  client.send({
+  const msg: Record<string, unknown> = {
     type: 'command',
     action: 'calculate_route',
     fromLon, fromLat, toLon, toLat,
-  })
+  }
+  if (heading !== undefined) msg.heading = heading
+  if (speed !== undefined) msg.speed = speed
+  client.send(msg)
 }
