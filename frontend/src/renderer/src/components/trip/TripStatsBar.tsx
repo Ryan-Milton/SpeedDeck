@@ -24,6 +24,8 @@ export function TripStatsBar(): React.JSX.Element {
   const [editing, setEditing] = useState(false)
   const [editValue, setEditValue] = useState(name)
   const inputRef = useRef<HTMLInputElement>(null)
+  const pendingSave = useRef(false)
+  const cancelRef = useRef(false)
 
   useEffect(() => {
     if (editing) {
@@ -33,8 +35,14 @@ export function TripStatsBar(): React.JSX.Element {
   }, [editing, name])
 
   const handleRename = (): void => {
+    if (pendingSave.current || cancelRef.current) {
+      cancelRef.current = false
+      return
+    }
+    pendingSave.current = true
     const trimmed = editValue.trim()
     setEditing(false)
+    pendingSave.current = false
     if (!trimmed || trimmed === name || !selectedTripId) return
 
     // Send rename command to backend
@@ -73,7 +81,7 @@ export function TripStatsBar(): React.JSX.Element {
           onBlur={handleRename}
           onKeyDown={(e) => {
             if (e.key === 'Enter') handleRename()
-            if (e.key === 'Escape') setEditing(false)
+            if (e.key === 'Escape') { cancelRef.current = true; setEditing(false) }
           }}
           className="text-lg font-semibold text-text-primary bg-surface-card rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-accent max-w-[200px]"
         />
