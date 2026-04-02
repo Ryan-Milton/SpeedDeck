@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { SearchResult, RouteData } from '../types/navigation'
-import { findNearestRoutePoint, distanceAlongCoords } from '../lib/nav-utils'
+import { findNearestRoutePoint, distanceAlongCoords, computeBearing, computeOffRouteScore } from '../lib/nav-utils'
 
 type NavStatus = 'idle' | 'previewing' | 'navigating'
 
@@ -19,7 +19,10 @@ interface NavigationState {
   eta: string // HH:MM display string
   currentStreetName: string
   isOffRoute: boolean
+  offRouteScore: number
   offRouteTimestamp: number | null
+  navigationStartTime: number | null
+  currentSpeedLimit: number | null // km/h, null if unknown
 
   // Search
   searchResults: SearchResult[]
@@ -39,7 +42,7 @@ interface NavigationState {
   setRoute: (route: RouteData | null) => void
   startNavigation: () => void
   stopNavigation: () => void
-  updatePosition: (lat: number, lon: number, heading: number, speed: number) => void
+  updatePosition: (lat: number, lon: number, heading: number, speed: number, hdop?: number | null) => void
   setOsrmReady: (ready: boolean) => void
   setIsCalculating: (calc: boolean) => void
 }
@@ -94,7 +97,10 @@ export const useNavigationStore = create<NavigationState>()((set, get) => ({
   eta: '',
   currentStreetName: '',
   isOffRoute: false,
+  offRouteScore: 0,
   offRouteTimestamp: null,
+  navigationStartTime: null,
+  currentSpeedLimit: null,
   searchResults: [],
   searchQuery: '',
   isSearchOpen: false,
@@ -121,7 +127,10 @@ export const useNavigationStore = create<NavigationState>()((set, get) => ({
       distanceRemaining: route?.distance ?? 0,
       durationRemaining: route?.duration ?? 0,
       isOffRoute: false,
+      offRouteScore: 0,
       offRouteTimestamp: null,
+      navigationStartTime: null,
+      currentSpeedLimit: null,
     })
   },
 
@@ -135,7 +144,10 @@ export const useNavigationStore = create<NavigationState>()((set, get) => ({
       durationRemaining: route.duration,
       currentStreetName: route.steps[0]?.name ?? '',
       isOffRoute: false,
+      offRouteScore: 0,
       offRouteTimestamp: null,
+      navigationStartTime: Date.now(),
+      currentSpeedLimit: null,
     })
   },
 
@@ -153,11 +165,14 @@ export const useNavigationStore = create<NavigationState>()((set, get) => ({
       eta: '',
       currentStreetName: '',
       isOffRoute: false,
+      offRouteScore: 0,
       offRouteTimestamp: null,
+      navigationStartTime: null,
+      currentSpeedLimit: null,
     })
   },
 
-  updatePosition: (lat, lon, _heading, speed): void => {
+  updatePosition: (lat, lon, heading, speed, hdop): void => {
     const { route, status, activeStepIndex } = get()
     if (status !== 'navigating' || !route) return
 
@@ -166,16 +181,6 @@ export const useNavigationStore = create<NavigationState>()((set, get) => ({
 
     // Find nearest point on route
     const nearest = findNearestRoutePoint(lon, lat, coords, nearestSearchStart, 100)
-
-    // Off-route detection (>50m from route)
-    const offRoute = nearest.distance > 50
-    const now = Date.now()
-    let offRouteTimestamp = get().offRouteTimestamp
-    if (offRoute && !offRouteTimestamp) {
-      offRouteTimestamp = now
-    } else if (!offRoute) {
-      offRouteTimestamp = null
-    }
 
     // Determine which step we're on
     let newStepIndex = activeStepIndex
@@ -194,12 +199,49 @@ export const useNavigationStore = create<NavigationState>()((set, get) => ({
       distToNext = distanceAlongCoords(coords, nearest.segmentIndex, stepEnd)
     }
 
+    // Off-route detection: combined distance + heading divergence scoring
+    const segEnd = Math.min(nearest.segmentIndex + 1, coords.length - 1)
+    const routeBearing = computeBearing(
+      coords[nearest.segmentIndex][1], coords[nearest.segmentIndex][0],
+      coords[segEnd][1], coords[segEnd][0]
+    )
+    const { score } = computeOffRouteScore({
+      distance: nearest.distance,
+      heading,
+      routeBearing,
+      speed,
+      hdop: hdop ?? null,
+      distToManeuver: distToNext,
+    })
+    const offRoute = score > 0.7
+
+    const now = Date.now()
+    let offRouteTimestamp = get().offRouteTimestamp
+    if (offRoute && !offRouteTimestamp) {
+      offRouteTimestamp = now
+    } else if (!offRoute) {
+      offRouteTimestamp = null
+    }
+
     // Distance remaining (from current position to end)
     const distFromHere = distanceAlongCoords(coords, nearest.segmentIndex, coords.length - 1)
 
-    // Duration remaining (proportional estimate)
+    // Duration remaining: pace-factor-adjusted OSRM estimate
     const totalDist = route.distance || 1
-    const durationRemaining = route.duration * (distFromHere / totalDist)
+    const osrmRemaining = route.duration * (distFromHere / totalDist)
+    let durationRemaining = osrmRemaining
+
+    const { navigationStartTime } = get()
+    const distTraveled = totalDist - distFromHere
+
+    if (navigationStartTime !== null && distTraveled > 100 && (now - navigationStartTime) > 30_000) {
+      const actualElapsedSec = (now - navigationStartTime) / 1000
+      const osrmExpectedForTraveled = route.duration * (distTraveled / totalDist)
+      if (osrmExpectedForTraveled > 0) {
+        const paceFactor = Math.max(0.5, Math.min(3.0, actualElapsedSec / osrmExpectedForTraveled))
+        durationRemaining = osrmRemaining * paceFactor
+      }
+    }
 
     // ETA
     const etaDate = new Date(Date.now() + durationRemaining * 1000)
@@ -207,6 +249,9 @@ export const useNavigationStore = create<NavigationState>()((set, get) => ({
 
     // Current street
     const currentStreetName = route.steps[newStepIndex]?.name ?? ''
+
+    // Speed limit for current segment (km/h, null if unknown)
+    const currentSpeedLimit = route.maxspeeds?.[nearest.segmentIndex] ?? null
 
     set({
       activeStepIndex: newStepIndex,
@@ -216,7 +261,9 @@ export const useNavigationStore = create<NavigationState>()((set, get) => ({
       eta,
       currentStreetName,
       isOffRoute: offRoute,
+      offRouteScore: score,
       offRouteTimestamp,
+      currentSpeedLimit,
     })
   },
 

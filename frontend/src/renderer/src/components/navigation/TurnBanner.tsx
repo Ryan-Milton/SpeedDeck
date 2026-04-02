@@ -1,6 +1,6 @@
 import { useNavigationStore } from '../../stores/navigation-store'
 import { useSettingsStore } from '../../stores/settings-store'
-import { convertDistance, distanceUnitLabel } from '../../lib/utils'
+import { formatNavDistance } from '../../lib/utils'
 import { maneuverInstruction, maneuverIcon } from '../../lib/nav-utils'
 import * as LucideIcons from 'lucide-react'
 import { cn } from '../../lib/utils'
@@ -22,10 +22,7 @@ export function TurnBanner(): React.JSX.Element | null {
   const Icon = (LucideIcons as Record<string, React.ComponentType<{ size?: number; className?: string }>>)[iconName] || LucideIcons.ArrowUp
   const instruction = maneuverInstruction(nextStep.maneuver.type, nextStep.maneuver.modifier, nextStep.name)
 
-  const distConverted = convertDistance(distToManeuver, unit)
-  const distText = distToManeuver < 160 // ~0.1 mi
-    ? `${Math.round(distToManeuver)} m`
-    : `${distConverted.toFixed(1)} ${distanceUnitLabel(unit)}`
+  const distText = formatNavDistance(distToManeuver, unit)
 
   const isClose = distToManeuver < 100
 

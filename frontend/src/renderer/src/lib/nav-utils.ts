@@ -112,3 +112,85 @@ export function maneuverInstruction(type: string, modifier?: string, streetName?
 
   return streetName ? `${direction} on ${streetName}` : direction || 'Continue'
 }
+
+/**
+ * Compute the initial bearing from point (lat1, lon1) to (lat2, lon2).
+ * Returns degrees 0-360.
+ */
+export function computeBearing(
+  lat1: number, lon1: number, lat2: number, lon2: number
+): number {
+  const toRad = (d: number): number => (d * Math.PI) / 180
+  const toDeg = (r: number): number => (r * 180) / Math.PI
+
+  const dLon = toRad(lon2 - lon1)
+  const y = Math.sin(dLon) * Math.cos(toRad(lat2))
+  const x =
+    Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
+    Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLon)
+  return (toDeg(Math.atan2(y, x)) + 360) % 360
+}
+
+/**
+ * Absolute difference between two bearings (0-360), result in 0-180.
+ */
+export function angleDifference(a: number, b: number): number {
+  return Math.abs(((a - b + 540) % 360) - 180)
+}
+
+/**
+ * Speed-adaptive off-route distance threshold in meters.
+ * Higher speed = wider threshold (GPS drift + lane offsets).
+ */
+export function speedAdaptiveThreshold(speed: number): number {
+  if (speed <= 5) return 30
+  if (speed <= 20) return 30 + (speed - 5) * (30 / 15)
+  if (speed <= 40) return 60 + (speed - 20) * (40 / 20)
+  return 100
+}
+
+/**
+ * HDOP-based multiplier for off-route threshold.
+ * Poor GPS accuracy = wider threshold to avoid false reroutes.
+ */
+function hdopFactor(hdop: number | null): number {
+  if (hdop === null || hdop <= 1.0) return 1.0
+  if (hdop >= 5.0) return 2.0
+  return 1.0 + (hdop - 1.0) * (1.0 / 4.0)
+}
+
+/**
+ * Compute a composite off-route score combining distance and heading divergence.
+ * Returns score in [0, 1] where > 0.7 means off-route.
+ */
+export function computeOffRouteScore(opts: {
+  distance: number
+  heading: number
+  routeBearing: number
+  speed: number
+  hdop: number | null
+  distToManeuver: number
+}): { score: number; distanceScore: number; headingScore: number; effectiveThreshold: number } {
+  const { distance, heading, routeBearing, speed, hdop, distToManeuver } = opts
+
+  const effectiveThreshold = speedAdaptiveThreshold(speed) * hdopFactor(hdop)
+  const distanceScore = Math.min(distance / effectiveThreshold, 1)
+
+  // Heading score: zeroed at low speed (GPS heading unreliable) or when close to route
+  let headingScore = 0
+  if (speed >= 2.0 && distance > 15) {
+    const headingDivergence = angleDifference(heading, routeBearing)
+    // Widen heading tolerance near upcoming maneuvers (turns naturally diverge heading)
+    const headingTolerance = distToManeuver < 100
+      ? 90 + (1 - distToManeuver / 100) * 45
+      : 90
+    headingScore = Math.min(headingDivergence / headingTolerance, 1)
+  }
+
+  // Raise distance weight when heading is unreliable (low speed)
+  const distanceWeight = speed < 2.0 ? 1.0 : 0.5
+  const headingWeight = speed < 2.0 ? 0.0 : 0.5
+  const score = distanceWeight * distanceScore + headingWeight * headingScore
+
+  return { score, distanceScore, headingScore, effectiveThreshold }
+}

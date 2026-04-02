@@ -242,8 +242,13 @@ async def main() -> None:
             from_lat = cmd.get("fromLat", 0)
             to_lon = cmd.get("toLon", 0)
             to_lat = cmd.get("toLat", 0)
+            heading = cmd.get("heading")
+            speed = cmd.get("speed")
             try:
-                result = await nav_router.calculate_route(from_lon, from_lat, to_lon, to_lat)
+                result = await nav_router.calculate_route(
+                    from_lon, from_lat, to_lon, to_lat,
+                    heading=heading, speed=speed,
+                )
                 return json.dumps(result)
             except Exception as e:
                 log.error("Route calculation failed: %s", e)
