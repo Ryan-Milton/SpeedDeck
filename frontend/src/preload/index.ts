@@ -4,7 +4,7 @@ const api = {
   getWsUrl: (): Promise<string> => ipcRenderer.invoke('get-ws-url'),
   getBackendStatus: (): Promise<{ running: boolean }> => ipcRenderer.invoke('get-backend-status'),
   toggleFullscreen: (): Promise<void> => ipcRenderer.invoke('toggle-fullscreen'),
-  showSaveDialog: (): Promise<string | null> => ipcRenderer.invoke('show-save-dialog'),
+  showSaveDialog: (defaultFilename?: string): Promise<string | null> => ipcRenderer.invoke('show-save-dialog', defaultFilename),
   saveFile: (filePath: string, content: string): Promise<void> =>
     ipcRenderer.invoke('save-file', filePath, content),
 
