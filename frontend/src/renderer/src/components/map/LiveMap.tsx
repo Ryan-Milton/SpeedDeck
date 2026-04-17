@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { useGpsStore } from '../../stores/gps-store'
+import { useSettingsStore } from '../../stores/settings-store'
 import { useNavigationStore } from '../../stores/navigation-store'
 import { resolveMapStyle, checkOnlineStyle, speedToColor } from '../../lib/map-style'
 
@@ -11,6 +12,7 @@ const CAMERA_PADDING = { top: 300, bottom: 0, left: 0, right: 0 }
 const TRAIL_DOWNSAMPLE = 10 // only add a trail point every N GPS updates (~1Hz at 10Hz)
 
 export function LiveMap(): React.JSX.Element {
+  const mapOrientation = useSettingsStore((s) => s.mapOrientation)
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
   const trailCoordsRef = useRef<number[][]>([])
@@ -19,6 +21,7 @@ export function LiveMap(): React.JSX.Element {
   const trailDirtyRef = useRef(false)
   const mapReadyRef = useRef(false)
   const onlineStyleRef = useRef(false) // true once we've switched to Carto
+  const lastHeadingRef = useRef<number | null>(null) // last known GPS heading
 
   // Initialize map once
   useEffect(() => {
@@ -208,6 +211,9 @@ export function LiveMap(): React.JSX.Element {
       // Only update if position actually changed
       if (prevFix && fix.latitude === prevFix.latitude && fix.longitude === prevFix.longitude) return
 
+      // Store latest heading so orientation toggle can apply it immediately when stationary
+      lastHeadingRef.current = fix.heading
+
       // Update vehicle dot position
       const vehicleSrc = map.getSource('vehicle') as maplibregl.GeoJSONSource | undefined
       vehicleSrc?.setData({
@@ -216,15 +222,27 @@ export function LiveMap(): React.JSX.Element {
         properties: {}
       })
 
-      // Camera follow: heading-up, pitched, vehicle near bottom
-      map.easeTo({
-        center: [fix.longitude, fix.latitude],
-        bearing: fix.heading,
-        pitch: DRIVING_PITCH,
-        padding: CAMERA_PADDING,
-        duration: 200,
-        easing: (t) => t
-      })
+      // Camera follow: heading-up (pitched, vehicle near bottom) or north-up (flat, centered)
+      const orientation = useSettingsStore.getState().mapOrientation
+      if (orientation === 'north-up') {
+        map.easeTo({
+          center: [fix.longitude, fix.latitude],
+          bearing: 0,
+          pitch: 0,
+          padding: { top: 0, bottom: 0, left: 0, right: 0 },
+          duration: 200,
+          easing: (t) => t
+        })
+      } else {
+        map.easeTo({
+          center: [fix.longitude, fix.latitude],
+          bearing: fix.heading,
+          pitch: DRIVING_PITCH,
+          padding: CAMERA_PADDING,
+          duration: 200,
+          easing: (t) => t
+        })
+      }
 
       // Breadcrumb trail (only during recording)
       if (tripStatus === 'recording') {
@@ -272,6 +290,37 @@ export function LiveMap(): React.JSX.Element {
 
     return unsub
   }, [])
+
+  // React to orientation toggle immediately (even when stationary)
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !mapReadyRef.current) return
+    const fix = useGpsStore.getState().fix
+    const heading = fix?.heading ?? lastHeadingRef.current ?? 0
+    const center: [number, number] | undefined = fix
+      ? [fix.longitude, fix.latitude]
+      : undefined
+    if (!center) return
+    if (mapOrientation === 'north-up') {
+      map.easeTo({
+        center,
+        bearing: 0,
+        pitch: 0,
+        padding: { top: 0, bottom: 0, left: 0, right: 0 },
+        duration: 300,
+        easing: (t) => t
+      })
+    } else {
+      map.easeTo({
+        center,
+        bearing: heading,
+        pitch: DRIVING_PITCH,
+        padding: CAMERA_PADDING,
+        duration: 300,
+        easing: (t) => t
+      })
+    }
+  }, [mapOrientation])
 
   // Subscribe to navigation route changes
   // Subscribe to navigation route and status changes

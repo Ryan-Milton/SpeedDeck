@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import { useGpsConnection } from './hooks/useGpsConnection'
 import { useSwipeNavigation } from './hooks/useSwipeNavigation'
 import { useSettingsStore } from './stores/settings-store'
@@ -27,6 +27,8 @@ import { TurnBanner } from './components/navigation/TurnBanner'
 import { NavStatusBar } from './components/navigation/NavStatusBar'
 import { DashboardNavOverlay } from './components/navigation/DashboardNavOverlay'
 import { RoutingDataOverlay } from './components/navigation/RoutingDataOverlay'
+import { ConfirmDialog } from './components/shared/ConfirmDialog'
+import { ToastContainer } from './components/shared/Toast'
 import { convertSpeed } from './lib/utils'
 import { cn } from './lib/utils'
 
@@ -43,6 +45,8 @@ export default function App(): React.JSX.Element {
   const smoothedSpeed = useGpsStore((s) => s.smoothedSpeed)
 
   const tripStatus = useGpsStore((s) => s.tripStatus)
+
+  const [confirmStopTrip, setConfirmStopTrip] = useState(false)
 
   const displaySpeed = Math.round(convertSpeed(smoothedSpeed, speedUnit))
   const isWarning = warningEnabled && displaySpeed > warningThreshold
@@ -106,7 +110,10 @@ export default function App(): React.JSX.Element {
             {/* Trip button overlay — top right */}
             <div className="absolute top-4 right-4 pointer-events-auto">
               <button
-                onClick={() => sendTripCommand(tripStatus === 'idle' ? 'trip_start' : 'trip_stop')}
+                onClick={() => {
+                  if (tripStatus === 'idle') sendTripCommand('trip_start')
+                  else setConfirmStopTrip(true)
+                }}
                 className={cn(
                   'h-10 px-5 rounded-full text-sm font-semibold shadow-sm transition-colors',
                   tripStatus !== 'idle'
@@ -147,6 +154,16 @@ export default function App(): React.JSX.Element {
       <TripDetailView />
       <TileDownloadOverlay />
       <RoutingDataOverlay />
+      <ConfirmDialog
+        open={confirmStopTrip}
+        title="Stop Trip Recording"
+        message="Are you sure you want to stop recording? The trip will be saved."
+        confirmLabel="Stop"
+        variant="danger"
+        onConfirm={() => { setConfirmStopTrip(false); sendTripCommand('trip_stop') }}
+        onCancel={() => setConfirmStopTrip(false)}
+      />
+      <ToastContainer />
     </div>
   )
 }

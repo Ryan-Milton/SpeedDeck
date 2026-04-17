@@ -1,14 +1,18 @@
 import { useGpsStore } from '../../stores/gps-store'
+import { useSettingsStore } from '../../stores/settings-store'
 import { useNavigationStore } from '../../stores/navigation-store'
 import { MapSpeedWidget } from './MapSpeedWidget'
-import { cardinalDirection, cn } from '../../lib/utils'
-import { Search } from 'lucide-react'
+import { cardinalDirection, formatCoord, cn } from '../../lib/utils'
+import { Search, Navigation, Compass } from 'lucide-react'
 
 export function MapOverlays({ compact }: { compact?: boolean }): React.JSX.Element {
   const heading = useGpsStore((s) => s.fix?.heading ?? 0)
   const hasFix = useGpsStore((s) => s.fix !== null && s.fix.fixQuality > 0)
   const connected = useGpsStore((s) => s.connected)
   const fixQuality = useGpsStore((s) => s.fix?.fixQuality ?? 0)
+  const latitude = useGpsStore((s) => s.fix?.latitude)
+  const longitude = useGpsStore((s) => s.fix?.longitude)
+  const coordFormat = useSettingsStore((s) => s.coordFormat)
 
   const cardinal = cardinalDirection(heading)
   const displayHeading = hasFix ? Math.round(heading) : null
@@ -33,22 +37,35 @@ export function MapOverlays({ compact }: { compact?: boolean }): React.JSX.Eleme
             </div>
           </div>
           {!compact && (
-            <div className="rounded-2xl flex items-baseline gap-2 px-4 py-2 bg-surface-card/90 backdrop-blur-xl">
-              <span className="font-semibold text-text-primary" style={{ fontSize: 28 }}>
-                {hasFix ? cardinal : '--'}
-              </span>
-              <span className="text-text-secondary" style={{ fontSize: 20 }}>
-                {displayHeading !== null ? `${displayHeading}°` : ''}
-              </span>
-            </div>
+            <>
+              <div className="rounded-2xl flex items-baseline gap-2 px-4 py-2 bg-surface-card/90 backdrop-blur-xl">
+                <span className="font-semibold text-text-primary" style={{ fontSize: 28 }}>
+                  {hasFix ? cardinal : '--'}
+                </span>
+                <span className="text-text-secondary" style={{ fontSize: 20 }}>
+                  {displayHeading !== null ? `${displayHeading}°` : ''}
+                </span>
+              </div>
+              {hasFix && latitude !== undefined && longitude !== undefined && (
+                <div className="rounded-2xl px-3 py-1.5 bg-surface-card/90 backdrop-blur-xl">
+                  <div className="text-[11px] font-semibold text-text-secondary tabular-nums leading-tight">
+                    {formatCoord(latitude, true, coordFormat)}
+                  </div>
+                  <div className="text-[11px] font-semibold text-text-secondary tabular-nums leading-tight">
+                    {formatCoord(longitude, false, coordFormat)}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
 
-        {/* Top-right: speed + search (full map mode only) */}
+        {/* Top-right: speed + search + orientation (full map mode only) */}
         {!compact && (
           <div className="pointer-events-auto flex flex-col gap-2 items-end">
             <MapSpeedWidget />
             <SearchButton />
+            <OrientationButton />
           </div>
         )}
       </div>
@@ -70,6 +87,25 @@ function SearchButton(): React.JSX.Element | null {
       className="w-12 h-12 rounded-2xl bg-surface-card/90 backdrop-blur-xl flex items-center justify-center text-text-secondary active:text-accent transition-colors"
     >
       <Search size={20} />
+    </button>
+  )
+}
+
+function OrientationButton(): React.JSX.Element {
+  const orientation = useSettingsStore((s) => s.mapOrientation)
+  const toggle = useSettingsStore((s) => s.toggleMapOrientation)
+  const isNorthUp = orientation === 'north-up'
+
+  return (
+    <button
+      onClick={toggle}
+      className={cn(
+        'w-12 h-12 rounded-2xl bg-surface-card/90 backdrop-blur-xl flex items-center justify-center transition-colors',
+        isNorthUp ? 'text-accent' : 'text-text-secondary active:text-accent'
+      )}
+      title={isNorthUp ? 'Switch to heading-up' : 'Switch to north-up'}
+    >
+      {isNorthUp ? <Compass size={20} /> : <Navigation size={20} />}
     </button>
   )
 }

@@ -13,6 +13,7 @@ interface GpsState {
   tripMaxSpeed: number
   tripAvgSpeed: number
   lastUpdate: number
+  sessionStart: number | null
 
   setConnected: (connected: boolean) => void
   updateFromServer: (data: {
@@ -40,11 +41,12 @@ export const useGpsStore = create<GpsState>()((set) => ({
   tripMaxSpeed: 0,
   tripAvgSpeed: 0,
   lastUpdate: 0,
+  sessionStart: null,
 
   setConnected: (connected): void => set({ connected }),
 
   updateFromServer: (data): void =>
-    set({
+    set((state) => ({
       fix: data.fix,
       smoothedSpeed: data.smoothedSpeed,
       maxSpeed: data.maxSpeed,
@@ -54,6 +56,7 @@ export const useGpsStore = create<GpsState>()((set) => ({
       tripDuration: data.tripDuration,
       tripMaxSpeed: data.tripMaxSpeed,
       tripAvgSpeed: data.tripAvgSpeed,
-      lastUpdate: Date.now()
-    })
+      lastUpdate: Date.now(),
+      sessionStart: state.sessionStart ?? Date.now()
+    }))
 }))

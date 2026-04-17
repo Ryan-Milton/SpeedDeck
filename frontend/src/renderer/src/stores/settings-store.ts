@@ -1,15 +1,19 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { SpeedUnit, AltitudeUnit } from '../types/gps'
+import type { SpeedUnit, AltitudeUnit, CoordFormat } from '../types/gps'
 
 type ViewMode = 'dashboard' | 'map' | 'trips'
+
+type MapOrientation = 'heading-up' | 'north-up'
 
 interface SettingsState {
   speedUnit: SpeedUnit
   altitudeUnit: AltitudeUnit
+  coordFormat: CoordFormat
   speedWarningEnabled: boolean
   speedWarningThreshold: number // stored in current unit
   showGraph: boolean
+  mapOrientation: MapOrientation
   settingsOpen: boolean
   viewMode: ViewMode
   tilesAvailable: boolean
@@ -19,8 +23,10 @@ interface SettingsState {
   setSpeedUnit: (unit: SpeedUnit) => void
   cycleSpeedUnit: () => void
   setAltitudeUnit: (unit: AltitudeUnit) => void
+  setCoordFormat: (format: CoordFormat) => void
   setSpeedWarning: (enabled: boolean, threshold?: number) => void
   setShowGraph: (show: boolean) => void
+  toggleMapOrientation: () => void
   toggleSettings: () => void
   setViewMode: (mode: ViewMode) => void
   setTilesAvailable: (available: boolean) => void
@@ -35,9 +41,11 @@ export const useSettingsStore = create<SettingsState>()(
     (set, get) => ({
       speedUnit: 'mph',
       altitudeUnit: 'ft',
+      coordFormat: 'dd',
       speedWarningEnabled: false,
       speedWarningThreshold: 80,
       showGraph: false,
+      mapOrientation: 'heading-up' as MapOrientation,
       settingsOpen: false,
       viewMode: 'dashboard',
       tilesAvailable: false,
@@ -54,6 +62,8 @@ export const useSettingsStore = create<SettingsState>()(
 
       setAltitudeUnit: (unit): void => set({ altitudeUnit: unit }),
 
+      setCoordFormat: (format): void => set({ coordFormat: format }),
+
       setSpeedWarning: (enabled, threshold): void =>
         set({
           speedWarningEnabled: enabled,
@@ -61,6 +71,9 @@ export const useSettingsStore = create<SettingsState>()(
         }),
 
       setShowGraph: (show): void => set({ showGraph: show }),
+
+      toggleMapOrientation: (): void =>
+        set((s) => ({ mapOrientation: s.mapOrientation === 'heading-up' ? 'north-up' : 'heading-up' })),
 
       toggleSettings: (): void => set((s) => ({ settingsOpen: !s.settingsOpen })),
 

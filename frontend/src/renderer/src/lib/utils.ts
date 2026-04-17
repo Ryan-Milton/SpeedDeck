@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
+import type { CoordFormat } from '../types/gps'
 
 export function cn(...inputs: ClassValue[]): string {
   return twMerge(clsx(inputs))
@@ -72,8 +73,19 @@ export function altitudeUnitLabel(unit: string): string {
   return 'M'
 }
 
-export function formatCoord(deg: number, isLat: boolean): string {
+export function formatCoord(deg: number, isLat: boolean, format: CoordFormat = 'dd'): string {
   const dir = isLat ? (deg >= 0 ? 'N' : 'S') : deg >= 0 ? 'E' : 'W'
+  if (format === 'dms') {
+    const abs = Math.abs(deg)
+    const d = Math.floor(abs)
+    const mFloat = (abs - d) * 60
+    const m = Math.floor(mFloat)
+    const sRaw = (mFloat - m) * 60
+    const sNum = sRaw >= 59.95 ? 0 : sRaw
+    const mAdj = sRaw >= 59.95 ? m + 1 : m
+    const s = sNum.toFixed(1).padStart(4, '0')
+    return `${d}° ${String(mAdj).padStart(2, '0')}' ${s}" ${dir}`
+  }
   return `${Math.abs(deg).toFixed(4)}° ${dir}`
 }
 

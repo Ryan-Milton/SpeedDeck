@@ -1,14 +1,14 @@
-import { useState, useRef, useEffect } from "react"
-import { useTripViewerStore } from "../../stores/trip-viewer-store"
-import { useSettingsStore } from "../../stores/settings-store"
+import { useState, useRef, useEffect } from 'react'
+import { useTripViewerStore } from '../../stores/trip-viewer-store'
+import { useSettingsStore } from '../../stores/settings-store'
 import {
   convertSpeed, convertDistance, convertAltitude,
   speedUnitLabel, distanceUnitLabel, altitudeUnitLabel, formatDuration
-} from "../../lib/utils"
-import { GpsWebSocketClient } from "../../lib/ws-client"
-import { GPS_WS_URL } from "../../lib/constants"
-import { ChevronLeft, Pencil } from "lucide-react"
-import type { Trackpoint } from "../../types/gps"
+} from '../../lib/utils'
+import { GpsWebSocketClient } from '../../lib/ws-client'
+import { GPS_WS_URL } from '../../lib/constants'
+import { ChevronLeft, Download, Pencil } from 'lucide-react'
+import type { Trackpoint, GpxDataMessage } from '../../types/gps'
 
 export function TripStatsBar(): React.JSX.Element {
   const trips = useTripViewerStore((s) => s.trips)
@@ -18,6 +18,10 @@ export function TripStatsBar(): React.JSX.Element {
   const setTrips = useTripViewerStore((s) => s.setTrips)
   const speedUnit = useSettingsStore((s) => s.speedUnit)
   const altUnit = useSettingsStore((s) => s.altitudeUnit)
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hasRequestedExportRef = useRef(false)
 
   const trip = trips.find((t) => t.id === selectedTripId)
   const name = trip?.name || `Trip #${selectedTripId}`
@@ -78,7 +82,7 @@ export function TripStatsBar(): React.JSX.Element {
 
     client.onConnectionChange = (connected): void => {
       if (connected) {
-        client.send({ type: "command", action: "trip_rename", tripId: selectedTripId, name: trimmed })
+        client.send({ type: 'command', action: 'trip_rename', tripId: selectedTripId, name: trimmed })
         // Update local state immediately
         setTrips(trips.map((t) => t.id === selectedTripId ? { ...t, name: trimmed } : t))
         client.disconnect()
@@ -89,6 +93,45 @@ export function TripStatsBar(): React.JSX.Element {
     client.connect()
   }
 
+  const handleExport = (): void => {
+    if (!selectedTripId || exporting) return
+    setExporting(true)
+    setExportError(null)
+    hasRequestedExportRef.current = false
+
+    const client = new GpsWebSocketClient(GPS_WS_URL)
+    client.onMessage = async (msg): Promise<void> => {
+      if (msg.type === 'gpxData') {
+        const data = msg as GpxDataMessage
+        if (data.tripId !== selectedTripId) return
+        if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null }
+        client.disconnect()
+        try {
+          const safeName = (name).replace(/[^a-zA-Z0-9_-]/g, '_')
+          const filePath = await window.api.showSaveDialog(`${safeName}.gpx`)
+          if (filePath) {
+            await window.api.saveFile(filePath, data.gpxXml)
+          }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
+          setExportError(`Export failed: ${message}`)
+        } finally {
+          setExporting(false)
+        }
+      }
+    }
+    client.onConnectionChange = (connected): void => {
+      if (connected && !hasRequestedExportRef.current) {
+        hasRequestedExportRef.current = true
+        client.send({ type: 'command', action: 'trip_export', tripId: selectedTripId })
+      }
+    }
+    client.connect()
+
+    // Timeout safety
+    timeoutRef.current = setTimeout(() => { setExporting(false); client.disconnect() }, 10000)
+  }
+
   const duration = trip?.startedAt && trip?.endedAt
     ? (new Date(trip.endedAt).getTime() - new Date(trip.startedAt).getTime()) / 1000
     : 0
@@ -96,44 +139,60 @@ export function TripStatsBar(): React.JSX.Element {
   const { elevGain } = computeElevation(trackpoints)
 
   return (
-    <div className="flex items-center h-14 px-4 border-b border-separator bg-surface gap-4">
-      <button
-        onClick={closeDetail}
-        className="w-10 h-10 flex items-center justify-center text-text-secondary active:text-accent transition-colors"
-      >
-        <ChevronLeft size={24} />
-      </button>
-
-      {editing ? (
-        <input
-          ref={inputRef}
-          value={editValue}
-          onChange={(e) => setEditValue(e.target.value)}
-          onBlur={performRename}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") performRename()
-            if (e.key === "Escape") { isCanceledRef.current = true; setEditing(false) }
-          }}
-          className="text-lg font-semibold text-text-primary bg-surface-card rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-accent max-w-[200px]"
-        />
-      ) : (
+    <div className="flex flex-col">
+      <div className="flex items-center h-14 px-4 border-b border-separator bg-surface gap-4">
         <button
-          onClick={startEditing}
-          className="flex items-center gap-2 text-lg font-semibold text-text-primary truncate hover:text-accent transition-colors"
+          onClick={closeDetail}
+          className="w-10 h-10 flex items-center justify-center text-text-secondary active:text-accent transition-colors"
         >
-          <span className="truncate">{name}</span>
-          <Pencil size={14} className="text-text-secondary shrink-0" />
+          <ChevronLeft size={24} />
         </button>
-      )}
 
-      <div className="flex-1" />
+        {editing ? (
+          <input
+            ref={inputRef}
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={performRename}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') performRename()
+              if (e.key === 'Escape') { isCanceledRef.current = true; setEditing(false) }
+            }}
+            className="text-lg font-semibold text-text-primary bg-surface-card rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-accent max-w-[200px]"
+          />
+        ) : (
+          <button
+            onClick={startEditing}
+            className="flex items-center gap-2 text-lg font-semibold text-text-primary truncate hover:text-accent transition-colors"
+          >
+            <span className="truncate">{name}</span>
+            <Pencil size={14} className="text-text-secondary shrink-0" />
+          </button>
+        )}
 
-      <StatPill label="Dist" value={convertDistance(trip?.distanceM ?? 0, speedUnit).toFixed(1)} unit={distanceUnitLabel(speedUnit)} />
-      <StatPill label="Time" value={formatDuration(duration)} />
-      <StatPill label="Max" value={String(Math.round(convertSpeed(trip?.maxSpeed ?? 0, speedUnit)))} unit={speedUnitLabel(speedUnit)} />
-      <StatPill label="Avg" value={String(Math.round(convertSpeed(trip?.avgSpeed ?? 0, speedUnit)))} unit={speedUnitLabel(speedUnit)} />
-      {elevGain > 0 && (
-        <StatPill label="Elev" value={`+${Math.round(convertAltitude(elevGain, altUnit))}`} unit={altitudeUnitLabel(altUnit)} />
+        <div className="flex-1" />
+
+        <StatPill label="Dist" value={convertDistance(trip?.distanceM ?? 0, speedUnit).toFixed(1)} unit={distanceUnitLabel(speedUnit)} />
+        <StatPill label="Time" value={formatDuration(duration)} />
+        <StatPill label="Max" value={String(Math.round(convertSpeed(trip?.maxSpeed ?? 0, speedUnit)))} unit={speedUnitLabel(speedUnit)} />
+        <StatPill label="Avg" value={String(Math.round(convertSpeed(trip?.avgSpeed ?? 0, speedUnit)))} unit={speedUnitLabel(speedUnit)} />
+        {elevGain > 0 && (
+          <StatPill label="Elev" value={`+${Math.round(convertAltitude(elevGain, altUnit))}`} unit={altitudeUnitLabel(altUnit)} />
+        )}
+
+        <button
+          onClick={handleExport}
+          disabled={exporting}
+          className="w-10 h-10 flex items-center justify-center text-text-secondary active:text-accent disabled:opacity-40 transition-colors"
+          title="Export GPX"
+        >
+          <Download size={20} />
+        </button>
+      </div>
+      {exportError && (
+        <div className="px-4 py-1 text-xs text-red-500 bg-surface border-b border-separator">
+          {exportError}
+        </div>
       )}
     </div>
   )
