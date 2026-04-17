@@ -119,9 +119,15 @@ export const useNavigationStore = create<NavigationState>()((set, get) => ({
     } else {
       cachedStepRanges = []
     }
+    const wasNavigating = get().status === 'navigating'
+    const newEta = wasNavigating && route
+      ? new Date(Date.now() + (route.duration ?? 0) * 1000)
+          .toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : ''
     set({
       route,
-      status: route ? 'previewing' : 'idle',
+      status: route ? (wasNavigating ? 'navigating' : 'previewing') : 'idle',
+      eta: newEta,
       activeStepIndex: 0,
       distanceToNextManeuver: 0,
       distanceRemaining: route?.distance ?? 0,
@@ -129,8 +135,9 @@ export const useNavigationStore = create<NavigationState>()((set, get) => ({
       isOffRoute: false,
       offRouteScore: 0,
       offRouteTimestamp: null,
-      navigationStartTime: null,
+      navigationStartTime: wasNavigating ? Date.now() : null,
       currentSpeedLimit: null,
+      currentStreetName: wasNavigating ? (route?.steps[0]?.name ?? '') : '',
     })
   },
 
