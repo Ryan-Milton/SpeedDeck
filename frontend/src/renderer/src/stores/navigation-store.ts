@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { SearchResult, RouteData } from '../types/navigation'
-import { findNearestRoutePoint, distanceAlongCoords, computeBearing, computeOffRouteScore } from '../lib/nav-utils'
+import { findNearestRoutePoint, distanceAlongCoordsFromProjection, computeBearing, computeOffRouteScore } from '../lib/nav-utils'
 
 type NavStatus = 'idle' | 'previewing' | 'navigating'
 
@@ -203,7 +203,7 @@ export const useNavigationStore = create<NavigationState>()((set, get) => ({
     let distToNext = 0
     if (newStepIndex < cachedStepRanges.length) {
       const stepEnd = cachedStepRanges[newStepIndex].end
-      distToNext = distanceAlongCoords(coords, nearest.segmentIndex, stepEnd)
+      distToNext = distanceAlongCoordsFromProjection(coords, nearest.segmentIndex, nearest.t, stepEnd)
     }
 
     // Off-route detection: combined distance + heading divergence scoring
@@ -231,7 +231,7 @@ export const useNavigationStore = create<NavigationState>()((set, get) => ({
     }
 
     // Distance remaining (from current position to end)
-    const distFromHere = distanceAlongCoords(coords, nearest.segmentIndex, coords.length - 1)
+    const distFromHere = distanceAlongCoordsFromProjection(coords, nearest.segmentIndex, nearest.t, coords.length - 1)
 
     // Duration remaining: pace-factor-adjusted OSRM estimate
     const totalDist = route.distance || 1
