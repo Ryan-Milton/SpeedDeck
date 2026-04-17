@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useTripViewerStore } from '../../stores/trip-viewer-store'
 import { useSettingsStore } from '../../stores/settings-store'
 import {
@@ -6,7 +6,8 @@ import {
   speedUnitLabel, distanceUnitLabel, altitudeUnitLabel, formatDuration
 } from '../../lib/utils'
 import { GpsWebSocketClient } from '../../lib/ws-client'
-import { ChevronLeft, Download } from 'lucide-react'
+import { GPS_WS_URL } from '../../lib/constants'
+import { ChevronLeft, Download, Pencil } from 'lucide-react'
 import type { Trackpoint, GpxDataMessage } from '../../types/gps'
 
 export function TripStatsBar(): React.JSX.Element {
@@ -14,6 +15,7 @@ export function TripStatsBar(): React.JSX.Element {
   const selectedTripId = useTripViewerStore((s) => s.selectedTripId)
   const trackpoints = useTripViewerStore((s) => s.trackpoints)
   const closeDetail = useTripViewerStore((s) => s.closeDetail)
+  const setTrips = useTripViewerStore((s) => s.setTrips)
   const speedUnit = useSettingsStore((s) => s.speedUnit)
   const altUnit = useSettingsStore((s) => s.altitudeUnit)
   const [exporting, setExporting] = useState(false)
@@ -24,13 +26,80 @@ export function TripStatsBar(): React.JSX.Element {
   const trip = trips.find((t) => t.id === selectedTripId)
   const name = trip?.name || `Trip #${selectedTripId}`
 
+  const [editing, setEditing] = useState(false)
+  const [editValue, setEditValue] = useState(name)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // isSavingRef: true while Enter-triggered save is in progress.
+  // Prevents the onBlur that fires on input unmount from re-entering performRename.
+  const isSavingRef = useRef(false)
+  // isCanceledRef: set to true by the Escape handler so onBlur does not commit the rename.
+  const isCanceledRef = useRef(false)
+  // wsClientRef: holds the active rename WS client so it can be cleaned up on unmount.
+  const wsClientRef = useRef<GpsWebSocketClient | null>(null)
+
+  useEffect(() => {
+    if (editing) {
+      setEditValue(name)
+      setTimeout(() => inputRef.current?.focus(), 50)
+    }
+  }, [editing, name])
+
+  // Disconnect any in-flight WS rename client when the component unmounts
+  useEffect(() => {
+    return (): void => {
+      wsClientRef.current?.disconnect()
+      wsClientRef.current = null
+    }
+  }, [])
+
+  /** Resets guard refs and enters editing mode. */
+  const startEditing = (): void => {
+    isSavingRef.current = false
+    isCanceledRef.current = false
+    setEditing(true)
+  }
+
+  /** Commits the rename to the backend. Called by both Enter and onBlur.
+   *  isSavingRef stays set until the next startEditing() call, so the
+   *  onBlur that fires when the input unmounts always hits the guard. */
+  const performRename = (): void => {
+    if (isSavingRef.current) return
+    if (isCanceledRef.current) {
+      isCanceledRef.current = false
+      return
+    }
+    isSavingRef.current = true
+    const trimmed = editValue.trim()
+    setEditing(false)
+    if (!trimmed || trimmed === name || !selectedTripId) return
+
+    // Disconnect any previous in-flight client before starting a new one
+    wsClientRef.current?.disconnect()
+
+    const client = new GpsWebSocketClient(GPS_WS_URL)
+    wsClientRef.current = client
+
+    client.onConnectionChange = (connected): void => {
+      if (connected) {
+        client.send({ type: 'command', action: 'trip_rename', tripId: selectedTripId, name: trimmed })
+        // Update local state immediately
+        setTrips(trips.map((t) => t.id === selectedTripId ? { ...t, name: trimmed } : t))
+        client.disconnect()
+        wsClientRef.current = null
+      }
+    }
+
+    client.connect()
+  }
+
   const handleExport = (): void => {
     if (!selectedTripId || exporting) return
     setExporting(true)
     setExportError(null)
     hasRequestedExportRef.current = false
 
-    const client = new GpsWebSocketClient('ws://127.0.0.1:8765')
+    const client = new GpsWebSocketClient(GPS_WS_URL)
     client.onMessage = async (msg): Promise<void> => {
       if (msg.type === 'gpxData') {
         const data = msg as GpxDataMessage
@@ -79,7 +148,27 @@ export function TripStatsBar(): React.JSX.Element {
           <ChevronLeft size={24} />
         </button>
 
-        <span className="text-lg font-semibold text-text-primary truncate">{name}</span>
+        {editing ? (
+          <input
+            ref={inputRef}
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={performRename}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') performRename()
+              if (e.key === 'Escape') { isCanceledRef.current = true; setEditing(false) }
+            }}
+            className="text-lg font-semibold text-text-primary bg-surface-card rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-accent max-w-[200px]"
+          />
+        ) : (
+          <button
+            onClick={startEditing}
+            className="flex items-center gap-2 text-lg font-semibold text-text-primary truncate hover:text-accent transition-colors"
+          >
+            <span className="truncate">{name}</span>
+            <Pencil size={14} className="text-text-secondary shrink-0" />
+          </button>
+        )}
 
         <div className="flex-1" />
 

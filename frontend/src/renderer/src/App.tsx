@@ -4,6 +4,7 @@ import { useSwipeNavigation } from './hooks/useSwipeNavigation'
 import { useSettingsStore } from './stores/settings-store'
 import { useGpsStore } from './stores/gps-store'
 import { GpsWebSocketClient } from './lib/ws-client'
+import { GPS_WS_URL } from './lib/constants'
 import { StatusBar } from './components/shared/StatusBar'
 import { TabBar } from './components/shared/TabBar'
 import { TripRecordingCard } from './components/shared/TripRecordingCard'
@@ -53,7 +54,7 @@ export default function App(): React.JSX.Element {
   // Trip command WS client
   const tripWsRef = useRef<GpsWebSocketClient | null>(null)
   useEffect(() => {
-    const client = new GpsWebSocketClient('ws://127.0.0.1:8765')
+    const client = new GpsWebSocketClient(GPS_WS_URL)
     tripWsRef.current = client
     client.connect()
     return (): void => client.disconnect()
