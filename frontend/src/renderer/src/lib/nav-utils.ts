@@ -35,13 +35,14 @@ export function findNearestRoutePoint(
   coords: number[][], // [[lon, lat], ...]
   startIndex: number = 0,
   windowSize: number = 50
-): { segmentIndex: number; distance: number; projection: [number, number] } {
+): { segmentIndex: number; distance: number; projection: [number, number]; t: number } {
   const from = Math.max(0, startIndex - 5)
   const to = Math.min(coords.length - 2, startIndex + windowSize)
 
   let bestDist = Infinity
   let bestIdx = from
   let bestProj: [number, number] = coords[from] as [number, number]
+  let bestT = 0
 
   for (let i = from; i <= to; i++) {
     const result = pointToSegmentDistance(
@@ -53,10 +54,11 @@ export function findNearestRoutePoint(
       bestDist = result.distance
       bestIdx = i
       bestProj = result.projection
+      bestT = result.t
     }
   }
 
-  return { segmentIndex: bestIdx, distance: bestDist, projection: bestProj }
+  return { segmentIndex: bestIdx, distance: bestDist, projection: bestProj, t: bestT }
 }
 
 /**
@@ -65,6 +67,29 @@ export function findNearestRoutePoint(
 export function distanceAlongCoords(coords: number[][], fromIdx: number, toIdx: number): number {
   let dist = 0
   for (let i = fromIdx; i < toIdx && i < coords.length - 1; i++) {
+    dist += haversineDistance(coords[i][1], coords[i][0], coords[i + 1][1], coords[i + 1][0])
+  }
+  return dist
+}
+
+/**
+ * Distance from a projected point (partway along a segment) to a target coordinate index.
+ * Uses the interpolation factor `t` (0-1) to compute partial distance on the current segment.
+ */
+export function distanceAlongCoordsFromProjection(
+  coords: number[][], segmentIndex: number, t: number, toIdx: number
+): number {
+  if (segmentIndex >= toIdx) return 0
+
+  // Partial distance: projected point → end of current segment
+  const segLen = haversineDistance(
+    coords[segmentIndex][1], coords[segmentIndex][0],
+    coords[segmentIndex + 1][1], coords[segmentIndex + 1][0]
+  )
+  let dist = (1 - t) * segLen
+
+  // Full segments after current one
+  for (let i = segmentIndex + 1; i < toIdx && i < coords.length - 1; i++) {
     dist += haversineDistance(coords[i][1], coords[i][0], coords[i + 1][1], coords[i + 1][0])
   }
   return dist

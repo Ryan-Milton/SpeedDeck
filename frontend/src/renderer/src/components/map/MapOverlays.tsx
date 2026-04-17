@@ -3,7 +3,7 @@ import { useSettingsStore } from '../../stores/settings-store'
 import { useNavigationStore } from '../../stores/navigation-store'
 import { MapSpeedWidget } from './MapSpeedWidget'
 import { cardinalDirection, formatCoord, cn } from '../../lib/utils'
-import { Search } from 'lucide-react'
+import { Search, Navigation, Compass } from 'lucide-react'
 
 export function MapOverlays({ compact }: { compact?: boolean }): React.JSX.Element {
   const heading = useGpsStore((s) => s.fix?.heading ?? 0)
@@ -60,11 +60,12 @@ export function MapOverlays({ compact }: { compact?: boolean }): React.JSX.Eleme
           )}
         </div>
 
-        {/* Top-right: speed + search (full map mode only) */}
+        {/* Top-right: speed + search + orientation (full map mode only) */}
         {!compact && (
           <div className="pointer-events-auto flex flex-col gap-2 items-end">
             <MapSpeedWidget />
             <SearchButton />
+            <OrientationButton />
           </div>
         )}
       </div>
@@ -86,6 +87,25 @@ function SearchButton(): React.JSX.Element | null {
       className="w-12 h-12 rounded-2xl bg-surface-card/90 backdrop-blur-xl flex items-center justify-center text-text-secondary active:text-accent transition-colors"
     >
       <Search size={20} />
+    </button>
+  )
+}
+
+function OrientationButton(): React.JSX.Element {
+  const orientation = useSettingsStore((s) => s.mapOrientation)
+  const toggle = useSettingsStore((s) => s.toggleMapOrientation)
+  const isNorthUp = orientation === 'north-up'
+
+  return (
+    <button
+      onClick={toggle}
+      className={cn(
+        'w-12 h-12 rounded-2xl bg-surface-card/90 backdrop-blur-xl flex items-center justify-center transition-colors',
+        isNorthUp ? 'text-accent' : 'text-text-secondary active:text-accent'
+      )}
+      title={isNorthUp ? 'Switch to heading-up' : 'Switch to north-up'}
+    >
+      {isNorthUp ? <Compass size={20} /> : <Navigation size={20} />}
     </button>
   )
 }
