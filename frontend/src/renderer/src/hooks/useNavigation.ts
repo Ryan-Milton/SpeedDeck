@@ -18,6 +18,7 @@ function computeRerouteDelay(speedMps: number): number {
 export function useNavigation(): void {
   const wsRef = useRef<GpsWebSocketClient | null>(null)
   const rerouteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const rerouteRetryCountRef = useRef<number>(0)
 
   // Create a dedicated WebSocket client for navigation commands
   useEffect(() => {
@@ -34,11 +35,41 @@ export function useNavigation(): void {
         const route = data as unknown as RouteDataMessage
         useNavigationStore.getState().setRoute(route.route)
         useNavigationStore.getState().setIsCalculating(false)
+        rerouteRetryCountRef.current = 0
       } else if (data.type === 'navStatus') {
         const status = data as unknown as NavStatusMessage
         useNavigationStore.getState().setOsrmReady(status.routerRunning)
       } else if (data.type === 'navError') {
         useNavigationStore.getState().setIsCalculating(false)
+
+        // Retry reroute with exponential backoff if still off-route
+        const nav = useNavigationStore.getState()
+        if (nav.isOffRoute && nav.status === 'navigating' && nav.destination) {
+          const retryCount = rerouteRetryCountRef.current
+          const MAX_REROUTE_RETRIES = 5
+          if (retryCount < MAX_REROUTE_RETRIES && !rerouteTimerRef.current) {
+            const backoffMs = 3000 * Math.pow(2, retryCount)
+            rerouteRetryCountRef.current = retryCount + 1
+            rerouteTimerRef.current = setTimeout(() => {
+              rerouteTimerRef.current = null
+              const navNow = useNavigationStore.getState()
+              const gps = useGpsStore.getState()
+              if (navNow.isOffRoute && navNow.destination && gps.fix) {
+                navNow.setIsCalculating(true)
+                wsRef.current?.send({
+                  type: 'command',
+                  action: 'calculate_route',
+                  fromLon: gps.fix.longitude,
+                  fromLat: gps.fix.latitude,
+                  toLon: navNow.destination.longitude,
+                  toLat: navNow.destination.latitude,
+                  heading: gps.fix.heading,
+                  speed: gps.smoothedSpeed,
+                })
+              }
+            }, backoffMs)
+          }
+        }
       }
     }
 
@@ -79,6 +110,9 @@ export function useNavigation(): void {
   useEffect(() => {
     const unsub = useNavigationStore.subscribe((state, prev) => {
       if (state.isOffRoute && !prev.isOffRoute) {
+        // Fresh off-route episode — reset retry count
+        rerouteRetryCountRef.current = 0
+
         // Start reroute timer with speed-adaptive delay
         const currentSpeed = useGpsStore.getState().smoothedSpeed
         const delayMs = computeRerouteDelay(currentSpeed)
@@ -102,11 +136,12 @@ export function useNavigation(): void {
           }
         }, delayMs)
       } else if (!state.isOffRoute && prev.isOffRoute) {
-        // Clear reroute timer
+        // Clear reroute timer and reset retry count
         if (rerouteTimerRef.current) {
           clearTimeout(rerouteTimerRef.current)
           rerouteTimerRef.current = null
         }
+        rerouteRetryCountRef.current = 0
       }
     })
 
