@@ -26,6 +26,7 @@ import { TurnBanner } from './components/navigation/TurnBanner'
 import { NavStatusBar } from './components/navigation/NavStatusBar'
 import { DashboardNavOverlay } from './components/navigation/DashboardNavOverlay'
 import { RoutingDataOverlay } from './components/navigation/RoutingDataOverlay'
+import { ToastContainer } from './components/shared/Toast'
 import { convertSpeed } from './lib/utils'
 import { cn } from './lib/utils'
 
@@ -146,6 +147,7 @@ export default function App(): React.JSX.Element {
       <TripDetailView />
       <TileDownloadOverlay />
       <RoutingDataOverlay />
+      <ToastContainer />
     </div>
   )
 }
