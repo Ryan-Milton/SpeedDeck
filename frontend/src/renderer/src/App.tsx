@@ -27,6 +27,7 @@ import { NavStatusBar } from './components/navigation/NavStatusBar'
 import { DashboardNavOverlay } from './components/navigation/DashboardNavOverlay'
 import { RoutingDataOverlay } from './components/navigation/RoutingDataOverlay'
 import { ConfirmDialog } from './components/shared/ConfirmDialog'
+import { ToastContainer } from './components/shared/Toast'
 import { convertSpeed } from './lib/utils'
 import { cn } from './lib/utils'
 
@@ -161,6 +162,7 @@ export default function App(): React.JSX.Element {
         onConfirm={() => { setConfirmStopTrip(false); sendTripCommand('trip_stop') }}
         onCancel={() => setConfirmStopTrip(false)}
       />
+      <ToastContainer />
     </div>
   )
 }
