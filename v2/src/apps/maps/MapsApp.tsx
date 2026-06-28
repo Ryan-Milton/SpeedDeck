@@ -1,6 +1,14 @@
-import ComingSoon from "../ComingSoon";
+import LiveMap from "./LiveMap";
+import MapOverlays from "./MapOverlays";
+import "./maps.css";
 
-// Replaced in Phase 4 (offline moving map) and Phase 6 (turn-by-turn nav).
+// Phase 4: the CarPlay Maps surface — a full-bleed live moving map with
+// glanceable speed/heading overlays. Turn-by-turn navigation lands in Phase 6.
 export default function MapsApp() {
-  return <ComingSoon title="Maps" phase="Offline map & turn-by-turn — Phase 4 / 6" />;
+  return (
+    <div className="maps-app">
+      <LiveMap />
+      <MapOverlays />
+    </div>
+  );
 }
