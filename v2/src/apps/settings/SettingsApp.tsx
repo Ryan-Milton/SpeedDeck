@@ -1,7 +1,8 @@
 import { useVehicleStore } from "../../stores/vehicle-store";
+import OfflineMapsSection from "./OfflineMapsSection";
 
-// Minimal settings/about surface. Grows with unit selection, map region
-// management, music sources, etc. in later phases.
+// Settings/about surface. Grows with unit selection, music sources, etc. in
+// later phases.
 export default function SettingsApp() {
   const state = useVehicleStore((s) => s.state);
   return (
@@ -21,6 +22,8 @@ export default function SettingsApp() {
           <span className="muted">SpeedDeck v2.0.0</span>
         </div>
       </div>
+
+      <OfflineMapsSection />
     </div>
   );
 }

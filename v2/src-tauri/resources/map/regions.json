@@ -1,0 +1,23 @@
+{
+  "$comment": "Offline map regions. `bbox` is minLon,minLat,maxLon,maxLat. download-tiles.sh extracts each into <id>.pmtiles. The Rust default_pmtiles_url prefers the first installed file in maps/mod.rs BUNDLED_PMTILES.",
+  "regions": [
+    {
+      "id": "seattle",
+      "name": "Seattle",
+      "file": "seattle.pmtiles",
+      "bbox": [-122.6, 47.0, -122.0, 47.8],
+      "minZoom": 0,
+      "maxZoom": 15,
+      "note": "Tight, higher-zoom pack matching the GPS simulator for end-to-end testing."
+    },
+    {
+      "id": "western-washington",
+      "name": "Western Washington",
+      "file": "western-washington.pmtiles",
+      "bbox": [-124.8, 46.0, -120.5, 49.0],
+      "minZoom": 0,
+      "maxZoom": 13,
+      "note": "Home region: Puget Sound, Olympic Peninsula, Cascade foothills."
+    }
+  ]
+}

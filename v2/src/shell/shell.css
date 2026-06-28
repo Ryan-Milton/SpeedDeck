@@ -240,3 +240,64 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   font-size: 17px;
 }
+
+.settings {
+  overflow-y: auto;
+}
+
+.offline-maps {
+  margin-top: 28px;
+}
+.offline-maps h3 {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.badge {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 4px 10px;
+}
+.badge.ok {
+  color: #fff;
+  background: #248a3d;
+}
+
+.dl-progress {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dl-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.dl-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+.settings-actions {
+  margin-top: 20px;
+}
+.settings-actions button,
+.dl-progress button {
+  background: var(--surface-2);
+  color: var(--text);
+  border: none;
+  border-radius: 12px;
+  padding: 12px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: var(--font);
+  min-height: 48px;
+  cursor: pointer;
+}

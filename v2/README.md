@@ -6,14 +6,30 @@ phone); maps are offline-first. See the repo root `README.md` for how this relat
 
 ## Status
 
-CarPlay shell (Phase 3). On top of the Phase 2 GPS spine, the UI is now a CarPlay-style shell:
-top status bar (clock + GPS signal), a left dock, a home grid of app icons, and app switching
-between Maps, Now Playing/Music, Dashboard, Settings (Phone is present but disabled — deferred).
-The Dashboard surface already renders live telemetry from the vehicle layer. App surfaces are
-placeholders pending their phases. Next: offline maps, turn-by-turn nav, trips, music, kiosk.
+Offline maps (Phase 4). The Maps surface is a live MapLibre moving map (heading-up camera with a
+north-up toggle, vehicle marker, speed/heading overlays) driven by the `vehicle:state` feed. Tiles
+resolve online → in-app cached → bundled PMTiles → blank. A Rust `maps/` module serves PMTiles and
+cached tiles over range-capable custom protocols (`tiles://`, `tile-cache://`) and runs an in-app
+tile downloader (Tauri commands + `tiles:download-progress` events); Settings → Offline Maps lists
+regions, shows cache usage, and clears the cache.
 
-The shell layout can be previewed in a plain browser with `npm run dev` (Tauri IPC is inert
-there, so it shows the "no GPS" state — useful for UI work without the full webview build).
+Earlier phases: Phase 2 GPS spine (Rust vehicle layer), Phase 3 CarPlay shell (status bar, dock,
+home grid, app switching; Dashboard shows live telemetry). Next: trips, turn-by-turn nav, music.
+
+The shell + map can be previewed in a plain browser with `npm run dev` (Tauri IPC is inert there,
+so it shows the "no GPS"/blank-map state — useful for UI work without the full webview build).
+
+### Offline map data
+
+Build the bundled PMTiles packs (needs the `pmtiles` CLI) into `src-tauri/resources/map/`:
+
+```bash
+cd v2 && ./scripts/download-tiles.sh            # seattle + western-washington
+./scripts/download-tiles.sh --bbox "..." --zoom 0-14 --out custom.pmtiles
+```
+
+Regions are described in `src-tauri/resources/map/regions.json`. Bundled `.pmtiles` are gitignored
+(produced at build time); the Rust `default_pmtiles_url` picks the first installed region.
 
 ### Vehicle data layer
 

@@ -1,7 +1,10 @@
 mod geo;
+mod maps;
 mod vehicle;
 
 use tauri::Manager;
+
+use maps::downloader::DownloadManager;
 
 use vehicle::gps_provider::GpsProvider;
 use vehicle::serial::detect_port;
@@ -62,12 +65,29 @@ fn build_providers() -> Vec<Box<dyn VehicleProvider>> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // Range-capable map asset protocols (replace v1 Electron handlers).
+        .register_uri_scheme_protocol("tiles", |ctx, request| {
+            maps::protocol::handle_tiles(ctx.app_handle(), &request)
+        })
+        .register_uri_scheme_protocol("tile-cache", |ctx, request| {
+            maps::protocol::handle_tile_cache(ctx.app_handle(), &request)
+        })
+        .manage(DownloadManager::default())
         .invoke_handler(tauri::generate_handler![
             ping,
             trip_start,
             trip_stop,
             trip_pause,
-            trip_resume
+            trip_resume,
+            maps::default_pmtiles_url,
+            maps::estimate_tile_download,
+            maps::start_tile_download,
+            maps::cancel_tile_download,
+            maps::download_progress,
+            maps::tiles_exist,
+            maps::cache_size,
+            maps::delete_cached_tiles,
+            maps::list_regions
         ])
         .setup(|app| {
             let hub = VehicleHub::start(app.handle().clone(), build_providers());
