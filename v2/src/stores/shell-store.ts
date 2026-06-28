@@ -2,7 +2,14 @@
 
 import { create } from "zustand";
 
-export type AppId = "maps" | "music" | "dashboard" | "nowplaying" | "phone" | "settings";
+export type AppId =
+  | "maps"
+  | "music"
+  | "dashboard"
+  | "nowplaying"
+  | "trips"
+  | "phone"
+  | "settings";
 
 interface ShellStore {
   /** `null` = the home grid; otherwise the open app. */

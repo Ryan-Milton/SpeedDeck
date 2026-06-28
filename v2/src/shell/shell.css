@@ -224,6 +224,37 @@
 .dash-val {
   font-size: 30px;
   font-weight: 600;
+  display: block;
+}
+
+.dash-trip {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+.dash-rec {
+  display: flex;
+  gap: 10px;
+}
+.rec-btn {
+  background: var(--surface-2);
+  color: var(--text);
+  border: none;
+  border-radius: 12px;
+  padding: 12px 18px;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: var(--font);
+  min-height: 52px;
+  cursor: pointer;
+}
+.rec-btn.start {
+  background: #3a1c1f;
+  color: #ff453a;
+}
+.rec-btn.stop {
+  background: #ff453a;
+  color: #fff;
 }
 
 /* Settings */

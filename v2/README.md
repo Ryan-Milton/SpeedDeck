@@ -6,15 +6,14 @@ phone); maps are offline-first. See the repo root `README.md` for how this relat
 
 ## Status
 
-Offline maps (Phase 4). The Maps surface is a live MapLibre moving map (heading-up camera with a
-north-up toggle, vehicle marker, speed/heading overlays) driven by the `vehicle:state` feed. Tiles
-resolve online → in-app cached → bundled PMTiles → blank. A Rust `maps/` module serves PMTiles and
-cached tiles over range-capable custom protocols (`tiles://`, `tile-cache://`) and runs an in-app
-tile downloader (Tauri commands + `tiles:download-progress` events); Settings → Offline Maps lists
-regions, shows cache usage, and clears the cache.
+Trip recording (Phase 5). A Rust `trips/` module persists trips to SQLite (`rusqlite`, v1 schema)
+via a buffered `TripRecorder` wired into the VehicleHub (records a trackpoint per fix while
+recording), with GPX 1.1 export. The Dashboard has record/pause/resume/stop controls; the new
+Trips surface lists recorded trips with detail, rename, delete, and GPX export.
 
-Earlier phases: Phase 2 GPS spine (Rust vehicle layer), Phase 3 CarPlay shell (status bar, dock,
-home grid, app switching; Dashboard shows live telemetry). Next: trips, turn-by-turn nav, music.
+Earlier phases: Phase 2 GPS spine, Phase 3 CarPlay shell, Phase 4 offline maps (MapLibre + PMTiles
+moving map, range-capable `tiles://`/`tile-cache://` protocols, in-app tile downloader). Next:
+turn-by-turn navigation (OSRM), music, dashboard split-view, Spotify + Steam Deck kiosk packaging.
 
 The shell + map can be previewed in a plain browser with `npm run dev` (Tauri IPC is inert there,
 so it shows the "no GPS"/blank-map state — useful for UI work without the full webview build).

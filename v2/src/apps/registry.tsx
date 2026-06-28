@@ -8,11 +8,13 @@ import {
   DashboardIcon,
   PhoneIcon,
   NowPlayingIcon,
+  TripsIcon,
   SettingsIcon,
 } from "./icons";
 import MapsApp from "./maps/MapsApp";
 import MusicApp from "./music/MusicApp";
 import DashboardApp from "./dashboard/DashboardApp";
+import TripsApp from "./trips/TripsApp";
 import SettingsApp from "./settings/SettingsApp";
 import ComingSoon from "./ComingSoon";
 
@@ -67,6 +69,15 @@ export const APPS: AppMeta[] = [
     gradient: ["#0a84ff", "#0040dd"],
     Icon: DashboardIcon,
     Screen: DashboardApp,
+    inDock: false,
+    enabled: true,
+  },
+  {
+    id: "trips",
+    label: "Trips",
+    gradient: ["#5e5ce6", "#3634a3"],
+    Icon: TripsIcon,
+    Screen: TripsApp,
     inDock: false,
     enabled: true,
   },

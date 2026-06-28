@@ -1,10 +1,12 @@
 mod geo;
 mod maps;
+mod trips;
 mod vehicle;
 
 use tauri::Manager;
 
 use maps::downloader::DownloadManager;
+use trips::{TripRecorder, TripStore};
 
 use vehicle::gps_provider::GpsProvider;
 use vehicle::serial::detect_port;
@@ -20,26 +22,43 @@ async fn ping(name: String) -> Result<String, String> {
     Ok(format!("pong: hello {name}"))
 }
 
-// --- Trip control (ported from v1 recorder/processor; DB persistence is Phase 5) ---
+// --- Trip control: the processor tracks live stats, the recorder persists
+//     trackpoints + the trip row (stats are read from the processor on stop). ---
 
 #[tauri::command]
-fn trip_start(hub: tauri::State<'_, VehicleHub>) {
+fn trip_start(
+    hub: tauri::State<'_, VehicleHub>,
+    recorder: tauri::State<'_, TripRecorder>,
+) -> Result<i64, String> {
+    let id = recorder.start()?;
     hub.processor().lock().unwrap().start_trip();
+    Ok(id)
 }
 
 #[tauri::command]
-fn trip_stop(hub: tauri::State<'_, VehicleHub>) {
+fn trip_stop(
+    hub: tauri::State<'_, VehicleHub>,
+    recorder: tauri::State<'_, TripRecorder>,
+) -> Result<(), String> {
+    let (distance, max_speed, avg_speed) = {
+        let p = hub.processor();
+        let p = p.lock().unwrap();
+        (p.trip_distance, p.trip_max_speed, p.trip_avg_speed)
+    };
     hub.processor().lock().unwrap().stop_trip();
+    recorder.stop(distance, max_speed, avg_speed)
 }
 
 #[tauri::command]
-fn trip_pause(hub: tauri::State<'_, VehicleHub>) {
+fn trip_pause(hub: tauri::State<'_, VehicleHub>, recorder: tauri::State<'_, TripRecorder>) {
     hub.processor().lock().unwrap().pause_trip();
+    recorder.pause();
 }
 
 #[tauri::command]
-fn trip_resume(hub: tauri::State<'_, VehicleHub>) {
+fn trip_resume(hub: tauri::State<'_, VehicleHub>, recorder: tauri::State<'_, TripRecorder>) {
     hub.processor().lock().unwrap().resume_trip();
+    recorder.resume();
 }
 
 /// Pick the telemetry providers. Live GPS when a receiver is detected (unless
@@ -87,10 +106,24 @@ pub fn run() {
             maps::tiles_exist,
             maps::cache_size,
             maps::delete_cached_tiles,
-            maps::list_regions
+            maps::list_regions,
+            trips::trip_list,
+            trips::trip_trackpoints,
+            trips::trip_delete,
+            trips::trip_rename,
+            trips::trip_export_gpx
         ])
         .setup(|app| {
-            let hub = VehicleHub::start(app.handle().clone(), build_providers());
+            let data_dir = app.path().app_data_dir().expect("app data dir");
+            let store = TripStore::open(&data_dir.join("trips.db")).expect("open trip database");
+            let recorder = TripRecorder::new(store);
+
+            let hub = VehicleHub::start(
+                app.handle().clone(),
+                build_providers(),
+                recorder.clone(),
+            );
+            app.manage(recorder);
             app.manage(hub);
             Ok(())
         })

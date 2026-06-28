@@ -23,6 +23,8 @@ use tauri::{AppHandle, Emitter};
 use nmea::RawFix;
 use processor::DataProcessor;
 
+use crate::trips::{Trackpoint, TripRecorder};
+
 /// Where a sample came from. Future: `Obd2`, `DeadReckoning`, ...
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -90,9 +92,14 @@ pub struct VehicleHub {
 
 impl VehicleHub {
     /// Start the hub: spawn every provider plus the consumer thread that emits
-    /// `vehicle:state`. Store the returned handle in Tauri state so command
-    /// handlers (trip control, ...) can reach the shared `DataProcessor`.
-    pub fn start(app: AppHandle, providers: Vec<Box<dyn VehicleProvider>>) -> Self {
+    /// `vehicle:state` and records trackpoints while a trip is active. Store the
+    /// returned handle in Tauri state so command handlers (trip control, ...)
+    /// can reach the shared `DataProcessor`.
+    pub fn start(
+        app: AppHandle,
+        providers: Vec<Box<dyn VehicleProvider>>,
+        recorder: TripRecorder,
+    ) -> Self {
         let (tx, rx): (Sender<VehicleSample>, Receiver<VehicleSample>) = channel();
         let stop = Arc::new(AtomicBool::new(false));
         let processor = Arc::new(Mutex::new(DataProcessor::new()));
@@ -110,6 +117,18 @@ impl VehicleHub {
                     let mut p = proc_for_consumer.lock().unwrap();
                     p.process(&sample)
                 };
+                // Persist a trackpoint (no-op unless a trip is recording).
+                recorder.record(Trackpoint {
+                    timestamp: state.fix.timestamp.clone(),
+                    latitude: state.fix.latitude,
+                    longitude: state.fix.longitude,
+                    altitude: state.fix.altitude,
+                    speed: Some(state.fix.speed),
+                    heading: Some(state.fix.heading),
+                    satellites: Some(state.fix.satellites as i64),
+                    fix_quality: Some(state.fix.fix_quality as i64),
+                    hdop: state.fix.hdop,
+                });
                 if app.emit("vehicle:state", &state).is_err() {
                     break; // app shutting down
                 }

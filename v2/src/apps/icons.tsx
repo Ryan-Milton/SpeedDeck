@@ -59,6 +59,16 @@ export function NowPlayingIcon({ size = 30 }: IconProps) {
   );
 }
 
+export function TripsIcon({ size = 30 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <circle cx="6" cy="6" r="2.4" fill="white" stroke="none" />
+      <circle cx="18" cy="18" r="2.4" fill="white" stroke="none" />
+      <path d="M6 8.5v4a3 3 0 0 0 3 3h6" />
+    </svg>
+  );
+}
+
 export function SettingsIcon({ size = 30 }: IconProps) {
   return (
     <svg {...base(size)}>

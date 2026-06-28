@@ -42,9 +42,9 @@ export function onVehicleState(cb: (state: VehicleState) => void): Promise<Unlis
   return listen<VehicleState>("vehicle:state", (event) => cb(event.payload));
 }
 
-/** Trip recording control (DB persistence lands in Phase 5). */
+/** Trip recording control. `start` returns the new trip id. */
 export const trip = {
-  start: () => invoke<void>("trip_start"),
+  start: () => invoke<number>("trip_start"),
   stop: () => invoke<void>("trip_stop"),
   pause: () => invoke<void>("trip_pause"),
   resume: () => invoke<void>("trip_resume"),
