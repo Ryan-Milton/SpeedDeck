@@ -5,6 +5,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { resolveMapStyle, checkOnlineStyle } from "./map-style";
 import { useVehicleStore } from "../../stores/vehicle-store";
 import { useSettingsStore } from "../../stores/settings-store";
+import { useNavigationStore } from "../../stores/navigation-store";
 
 const DEFAULT_ZOOM = 16;
 const DRIVING_PITCH = 50;
@@ -48,7 +49,9 @@ export default function LiveMap() {
 
       map.on("load", () => {
         readyRef.current = true;
+        addRouteLayers(map);
         addVehicleLayers(map, center);
+        applyRoute(map);
         onlineRef.current = typeof style === "string";
       });
     })();
@@ -115,6 +118,15 @@ export default function LiveMap() {
     return unsub;
   }, []);
 
+  // --- draw / clear the active route ---
+  useEffect(() => {
+    return useNavigationStore.subscribe((s, prev) => {
+      if (s.route === prev.route) return;
+      const map = mapRef.current;
+      if (map && readyRef.current) applyRoute(map);
+    });
+  }, []);
+
   // --- upgrade to the online style if connectivity returns ---
   useEffect(() => {
     const tryUpgrade = async () => {
@@ -126,7 +138,9 @@ export default function LiveMap() {
       map.setStyle(url);
       map.once("styledata", () => {
         const last = lastFixRef.current;
+        addRouteLayers(map);
         addVehicleLayers(map, last ? [last.lon, last.lat] : SEATTLE);
+        applyRoute(map);
       });
     };
     const id = setInterval(tryUpgrade, 10_000);
@@ -142,6 +156,41 @@ export default function LiveMap() {
 
 function pointFeature(lon: number, lat: number): GeoJSON.Feature {
   return { type: "Feature", geometry: { type: "Point", coordinates: [lon, lat] }, properties: {} };
+}
+
+const EMPTY_LINE: GeoJSON.Feature = {
+  type: "Feature",
+  geometry: { type: "LineString", coordinates: [] },
+  properties: {},
+};
+
+function addRouteLayers(map: maplibregl.Map) {
+  if (map.getSource("route")) return;
+  map.addSource("route", { type: "geojson", data: EMPTY_LINE });
+  map.addLayer({
+    id: "route-outline",
+    type: "line",
+    source: "route",
+    layout: { "line-cap": "round", "line-join": "round" },
+    paint: { "line-width": 9, "line-color": "#000000", "line-opacity": 0.35 },
+  });
+  map.addLayer({
+    id: "route-line",
+    type: "line",
+    source: "route",
+    layout: { "line-cap": "round", "line-join": "round" },
+    paint: { "line-width": 6, "line-color": "#0A84FF", "line-opacity": 0.9 },
+  });
+}
+
+// Push the current navigation route (or clear it) into the 'route' source.
+function applyRoute(map: maplibregl.Map) {
+  const src = map.getSource("route") as maplibregl.GeoJSONSource | undefined;
+  if (!src) return;
+  const route = useNavigationStore.getState().route;
+  src.setData(
+    route ? { type: "Feature", geometry: route.geometry, properties: {} } : EMPTY_LINE
+  );
 }
 
 function addVehicleLayers(map: maplibregl.Map, center: [number, number]) {
