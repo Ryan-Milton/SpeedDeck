@@ -1,11 +1,13 @@
 mod geo;
 mod maps;
+mod nav;
 mod trips;
 mod vehicle;
 
 use tauri::Manager;
 
 use maps::downloader::DownloadManager;
+use nav::OsrmManager;
 use trips::{TripRecorder, TripStore};
 
 use vehicle::gps_provider::GpsProvider;
@@ -84,6 +86,7 @@ fn build_providers() -> Vec<Box<dyn VehicleProvider>> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
         // Range-capable map asset protocols (replace v1 Electron handlers).
         .register_uri_scheme_protocol("tiles", |ctx, request| {
             maps::protocol::handle_tiles(ctx.app_handle(), &request)
@@ -92,6 +95,7 @@ pub fn run() {
             maps::protocol::handle_tile_cache(ctx.app_handle(), &request)
         })
         .manage(DownloadManager::default())
+        .manage(OsrmManager::default())
         .invoke_handler(tauri::generate_handler![
             ping,
             trip_start,
@@ -111,7 +115,13 @@ pub fn run() {
             trips::trip_trackpoints,
             trips::trip_delete,
             trips::trip_rename,
-            trips::trip_export_gpx
+            trips::trip_export_gpx,
+            nav::nav_status,
+            nav::calculate_route,
+            nav::geocode_search,
+            nav::nav_list_regions,
+            nav::nav_download_region,
+            nav::nav_delete_region
         ])
         .setup(|app| {
             let data_dir = app.path().app_data_dir().expect("app data dir");
@@ -125,6 +135,11 @@ pub fn run() {
             );
             app.manage(recorder);
             app.manage(hub);
+
+            // Auto-start routing for an already-installed region.
+            let nav_app = app.handle().clone();
+            let osrm = app.state::<OsrmManager>().inner().clone();
+            tauri::async_runtime::spawn(nav::autostart(nav_app, osrm));
             Ok(())
         })
         .run(tauri::generate_context!())

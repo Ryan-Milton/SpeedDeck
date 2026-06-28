@@ -1,7 +1,14 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Core permissions for the main SpeedDeck window: event listen/emit and the app's own commands.",
+  "description": "Core permissions for the main SpeedDeck window: events, the app's own commands, and spawning the bundled osrm-routed sidecar.",
   "windows": ["main"],
-  "permissions": ["core:default", "core:event:default"]
+  "permissions": [
+    "core:default",
+    "core:event:default",
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [{ "name": "binaries/osrm-routed", "sidecar": true, "args": true }]
+    }
+  ]
 }
