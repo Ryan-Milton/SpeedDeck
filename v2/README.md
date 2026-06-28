@@ -15,6 +15,8 @@ Earlier phases: Phase 2 GPS spine, Phase 3 CarPlay shell, Phase 4 offline maps (
 moving map, range-capable `tiles://`/`tile-cache://` protocols, in-app tile downloader). Next:
 turn-by-turn navigation (OSRM), music, dashboard split-view, Spotify + Steam Deck kiosk packaging.
 
+The next phase is specified in [`docs/phase-6-navigation.md`](docs/phase-6-navigation.md).
+
 The shell + map can be previewed in a plain browser with `npm run dev` (Tauri IPC is inert there,
 so it shows the "no GPS"/blank-map state — useful for UI work without the full webview build).
 
