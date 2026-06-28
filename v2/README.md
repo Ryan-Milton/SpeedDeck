@@ -6,10 +6,14 @@ phone); maps are offline-first. See the repo root `README.md` for how this relat
 
 ## Status
 
-GPS spine (Phase 2). The Rust vehicle layer reads a USB NMEA receiver (or a built-in simulator),
-parses GGA/RMC/VTG, applies EMA smoothing, and emits live `vehicle:state` to the UI; trip
-recording control is wired (DB persistence lands in Phase 5). The frontend shows a live telemetry
-readout. Next: the CarPlay shell, offline maps, turn-by-turn nav, trips, music, kiosk packaging.
+CarPlay shell (Phase 3). On top of the Phase 2 GPS spine, the UI is now a CarPlay-style shell:
+top status bar (clock + GPS signal), a left dock, a home grid of app icons, and app switching
+between Maps, Now Playing/Music, Dashboard, Settings (Phone is present but disabled — deferred).
+The Dashboard surface already renders live telemetry from the vehicle layer. App surfaces are
+placeholders pending their phases. Next: offline maps, turn-by-turn nav, trips, music, kiosk.
+
+The shell layout can be previewed in a plain browser with `npm run dev` (Tauri IPC is inert
+there, so it shows the "no GPS" state — useful for UI work without the full webview build).
 
 ### Vehicle data layer
 
