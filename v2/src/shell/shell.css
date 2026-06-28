@@ -316,8 +316,19 @@
   transition: width 0.2s ease;
 }
 
+.music-folder-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 70%;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
 .settings-actions {
   margin-top: 20px;
+  display: flex;
+  gap: 12px;
 }
 .settings-actions button,
 .dl-progress button {

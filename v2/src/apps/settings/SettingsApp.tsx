@@ -1,5 +1,6 @@
 import { useVehicleStore } from "../../stores/vehicle-store";
 import OfflineMapsSection from "./OfflineMapsSection";
+import MusicSection from "./MusicSection";
 
 // Settings/about surface. Grows with unit selection, music sources, etc. in
 // later phases.
@@ -24,6 +25,7 @@ export default function SettingsApp() {
       </div>
 
       <OfflineMapsSection />
+      <MusicSection />
     </div>
   );
 }

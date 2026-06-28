@@ -13,6 +13,7 @@ import {
 } from "./icons";
 import MapsApp from "./maps/MapsApp";
 import MusicApp from "./music/MusicApp";
+import NowPlayingApp from "./music/NowPlayingApp";
 import DashboardApp from "./dashboard/DashboardApp";
 import TripsApp from "./trips/TripsApp";
 import SettingsApp from "./settings/SettingsApp";
@@ -50,7 +51,7 @@ export const APPS: AppMeta[] = [
     label: "Now Playing",
     gradient: ["#ff9f0a", "#ff6b00"],
     Icon: NowPlayingIcon,
-    Screen: MusicApp,
+    Screen: NowPlayingApp,
     inDock: true,
     enabled: true,
   },

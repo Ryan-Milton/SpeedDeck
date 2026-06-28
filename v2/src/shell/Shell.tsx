@@ -1,6 +1,7 @@
 import { APP_BY_ID } from "../apps/registry";
 import { useVehicleFeed } from "../hooks/useVehicleFeed";
 import { useNavigation } from "../hooks/useNavigation";
+import { useMediaFeed } from "../hooks/useMediaFeed";
 import { useShellStore } from "../stores/shell-store";
 import Dock from "./Dock";
 import HomeGrid from "./HomeGrid";
@@ -12,6 +13,7 @@ import "./shell.css";
 export default function Shell() {
   useVehicleFeed(); // single live subscription to backend telemetry
   useNavigation(); // route guidance + reroute driven by the GPS feed
+  useMediaFeed(); // live music playback state
 
   const activeApp = useShellStore((s) => s.activeApp);
   const ActiveScreen = activeApp ? APP_BY_ID[activeApp].Screen : null;

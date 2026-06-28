@@ -6,16 +6,17 @@ phone); maps are offline-first. See the repo root `README.md` for how this relat
 
 ## Status
 
-Turn-by-turn navigation (Phase 6). A Rust `nav/` module runs the bundled `osrm-routed` engine as a
-Tauri sidecar, calculates routes (`reqwest` → OSRM, with the speed-adaptive bearing constraint and
-v1's fallbacks), and geocodes via offline FTS5 (`places.db`) with a Nominatim online fallback.
-The frontend ports v1's guidance math/store/components: destination search, route preview, turn
-banner, ETA/speed-limit status bar, and automatic rerouting driven by the GPS feed; the route is
-drawn on the live map. Routing data is delivered as **in-app downloaded region packs**.
+Local music (Phase 7). A Rust `media/` module scans `~/Music` (+ folders you add) for audio,
+reads tags/cover art via `lofty`, caches a SQLite library (`music.db`, FTS5 search), and plays via
+`rodio` on a dedicated thread with a queue, shuffle, repeat, and seek. The frontend adds a CarPlay
+**Music** browse surface (Albums/Artists/Songs + search, album art via `music-art://`) and a
+full-screen **Now Playing** (art + scrubber + transport + shuffle/repeat/volume); Settings manages
+scan folders. Audio decodes in Rust (not HTML5). Spotify is Phase 9.
 
 Earlier phases: Phase 2 GPS spine, Phase 3 CarPlay shell, Phase 4 offline maps, Phase 5 trip
-recording. Next: local music, dashboard split-view, Spotify + Steam Deck kiosk packaging.
-Phase 6 is specified in [`docs/phase-6-navigation.md`](docs/phase-6-navigation.md).
+recording, Phase 6 turn-by-turn navigation (see
+[`docs/phase-6-navigation.md`](docs/phase-6-navigation.md)). Next: dashboard split-view, then
+Spotify + Steam Deck kiosk packaging.
 
 ### Navigation data (off-device build)
 
