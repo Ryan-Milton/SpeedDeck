@@ -1,5 +1,5 @@
 {
-  "$comment": "Offline map regions. `bbox` is minLon,minLat,maxLon,maxLat. download-tiles.sh extracts each into <id>.pmtiles. The Rust default_pmtiles_url prefers the first installed file in maps/mod.rs BUNDLED_PMTILES.",
+  "$comment": "Regions for offline maps (PMTiles) and navigation (OSRM graph + geocoder). `bbox` is minLon,minLat,maxLon,maxLat. download-tiles.sh extracts map tiles into <id>.pmtiles. build-osrm-graph.sh / build-places-db.sh produce a nav pack (<id>.zip of region.osrm* + places.db); host it and set `navPackUrl`, or sideload by extracting into <app-data>/nav/<id>/. Empty navPackUrl = download disabled (sideload only).",
   "regions": [
     {
       "id": "seattle",
@@ -8,6 +8,7 @@
       "bbox": [-122.6, 47.0, -122.0, 47.8],
       "minZoom": 0,
       "maxZoom": 15,
+      "navPackUrl": "",
       "note": "Tight, higher-zoom pack matching the GPS simulator for end-to-end testing."
     },
     {
@@ -17,6 +18,7 @@
       "bbox": [-124.8, 46.0, -120.5, 49.0],
       "minZoom": 0,
       "maxZoom": 13,
+      "navPackUrl": "",
       "note": "Home region: Puget Sound, Olympic Peninsula, Cascade foothills."
     }
   ]

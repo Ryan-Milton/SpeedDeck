@@ -6,16 +6,37 @@ phone); maps are offline-first. See the repo root `README.md` for how this relat
 
 ## Status
 
-Trip recording (Phase 5). A Rust `trips/` module persists trips to SQLite (`rusqlite`, v1 schema)
-via a buffered `TripRecorder` wired into the VehicleHub (records a trackpoint per fix while
-recording), with GPX 1.1 export. The Dashboard has record/pause/resume/stop controls; the new
-Trips surface lists recorded trips with detail, rename, delete, and GPX export.
+Turn-by-turn navigation (Phase 6). A Rust `nav/` module runs the bundled `osrm-routed` engine as a
+Tauri sidecar, calculates routes (`reqwest` → OSRM, with the speed-adaptive bearing constraint and
+v1's fallbacks), and geocodes via offline FTS5 (`places.db`) with a Nominatim online fallback.
+The frontend ports v1's guidance math/store/components: destination search, route preview, turn
+banner, ETA/speed-limit status bar, and automatic rerouting driven by the GPS feed; the route is
+drawn on the live map. Routing data is delivered as **in-app downloaded region packs**.
 
-Earlier phases: Phase 2 GPS spine, Phase 3 CarPlay shell, Phase 4 offline maps (MapLibre + PMTiles
-moving map, range-capable `tiles://`/`tile-cache://` protocols, in-app tile downloader). Next:
-turn-by-turn navigation (OSRM), music, dashboard split-view, Spotify + Steam Deck kiosk packaging.
+Earlier phases: Phase 2 GPS spine, Phase 3 CarPlay shell, Phase 4 offline maps, Phase 5 trip
+recording. Next: local music, dashboard split-view, Spotify + Steam Deck kiosk packaging.
+Phase 6 is specified in [`docs/phase-6-navigation.md`](docs/phase-6-navigation.md).
 
-The next phase is specified in [`docs/phase-6-navigation.md`](docs/phase-6-navigation.md).
+### Navigation data (off-device build)
+
+Routing needs the `osrm-routed` sidecar binary and a per-region pack (graph + geocoder DB):
+
+```bash
+# 1. OSRM sidecar binary for the Steam Deck (x86_64) — from the Docker image:
+#    place it at src-tauri/binaries/osrm-routed-x86_64-unknown-linux-gnu
+# 2. Build a region pack (graph + places.db):
+cd v2
+./scripts/build-places-db.sh path/to/western-washington.osm.pbf dist/nav/western-washington/places.db
+./scripts/build-osrm-graph.sh western-washington \
+  https://download.geofabrik.de/north-america/us/washington-latest.osm.pbf \
+  dist/nav/western-washington/places.db
+# -> dist/nav/western-washington.zip
+```
+
+Host the `.zip` and set its URL as `navPackUrl` in `src-tauri/resources/map/regions.json` (then it
+downloads in-app from Settings/Maps), or **sideload** by extracting it into the app data dir's
+`nav/<region>/`. Search works offline from the pack's `places.db` and falls back to Nominatim
+online.
 
 The shell + map can be previewed in a plain browser with `npm run dev` (Tauri IPC is inert there,
 so it shows the "no GPS"/blank-map state — useful for UI work without the full webview build).
