@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Core permissions for the main SpeedDeck window: event listen/emit and the app's own commands.",
+  "windows": ["main"],
+  "permissions": ["core:default", "core:event:default"]
+}
