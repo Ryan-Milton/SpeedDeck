@@ -59,7 +59,7 @@ fn resolve_resource_or_data(app: &AppHandle, rel: &str) -> Option<PathBuf> {
     None
 }
 
-fn serve_file(path: &Path, req: &Request<Vec<u8>>) -> Response<Vec<u8>> {
+pub fn serve_file(path: &Path, req: &Request<Vec<u8>>) -> Response<Vec<u8>> {
     let Ok(mut file) = File::open(path) else {
         return status(StatusCode::NOT_FOUND);
     };
@@ -139,7 +139,7 @@ fn content_type(path: &Path) -> &'static str {
     }
 }
 
-fn status(code: StatusCode) -> Response<Vec<u8>> {
+pub fn status(code: StatusCode) -> Response<Vec<u8>> {
     Response::builder()
         .status(code)
         .header("Access-Control-Allow-Origin", "*")

@@ -1,5 +1,6 @@
 mod geo;
 mod maps;
+mod media;
 mod nav;
 mod trips;
 mod vehicle;
@@ -7,6 +8,7 @@ mod vehicle;
 use tauri::Manager;
 
 use maps::downloader::DownloadManager;
+use media::{LibraryStore, MediaController};
 use nav::OsrmManager;
 use trips::{TripRecorder, TripStore};
 
@@ -87,12 +89,16 @@ fn build_providers() -> Vec<Box<dyn VehicleProvider>> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        // Range-capable map asset protocols (replace v1 Electron handlers).
+        .plugin(tauri_plugin_dialog::init())
+        // Range-capable asset protocols (replace v1 Electron handlers).
         .register_uri_scheme_protocol("tiles", |ctx, request| {
             maps::protocol::handle_tiles(ctx.app_handle(), &request)
         })
         .register_uri_scheme_protocol("tile-cache", |ctx, request| {
             maps::protocol::handle_tile_cache(ctx.app_handle(), &request)
+        })
+        .register_uri_scheme_protocol("music-art", |ctx, request| {
+            media::protocol::handle_album_art(ctx.app_handle(), &request)
         })
         .manage(DownloadManager::default())
         .manage(OsrmManager::default())
@@ -121,7 +127,28 @@ pub fn run() {
             nav::geocode_search,
             nav::nav_list_regions,
             nav::nav_download_region,
-            nav::nav_delete_region
+            nav::nav_delete_region,
+            media::music_scan,
+            media::music_folders,
+            media::music_add_folder,
+            media::music_remove_folder,
+            media::music_albums,
+            media::music_artists,
+            media::music_tracks,
+            media::music_tracks_by_album,
+            media::music_search,
+            media::music_track_count,
+            media::music_play_track,
+            media::music_play_album,
+            media::music_pause,
+            media::music_resume,
+            media::music_next,
+            media::music_prev,
+            media::music_seek,
+            media::music_set_volume,
+            media::music_set_shuffle,
+            media::music_set_repeat,
+            media::music_state
         ])
         .setup(|app| {
             let data_dir = app.path().app_data_dir().expect("app data dir");
@@ -140,6 +167,26 @@ pub fn run() {
             let nav_app = app.handle().clone();
             let osrm = app.state::<OsrmManager>().inner().clone();
             tauri::async_runtime::spawn(nav::autostart(nav_app, osrm));
+
+            // Music: open the library, seed ~/Music, start the controller, and
+            // kick a background scan.
+            let library = LibraryStore::open(&data_dir.join("music.db")).expect("open music db");
+            media::ensure_default_folder(app.handle(), &library);
+            let controller = MediaController::new(app.handle().clone(), library.clone());
+            app.manage(controller);
+            app.manage(library.clone());
+            {
+                let scan_app = app.handle().clone();
+                let scan_lib = library;
+                tauri::async_runtime::spawn_blocking(move || {
+                    let art = scan_app
+                        .path()
+                        .app_data_dir()
+                        .map(|d| d.join("music-cache/art"))
+                        .unwrap_or_default();
+                    let _ = media::scanner::scan(&scan_app, &scan_lib, &art);
+                });
+            }
             Ok(())
         })
         .run(tauri::generate_context!())
