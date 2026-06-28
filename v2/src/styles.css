@@ -83,3 +83,47 @@ body {
   font-size: 16px;
   font-weight: 600;
 }
+
+.speed-hero {
+  margin-top: 24px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.speed-value {
+  font-size: 120px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.speed-unit {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.controls {
+  margin-top: 24px;
+  display: flex;
+  gap: 12px;
+}
+
+.controls button {
+  background: var(--surface-2);
+  color: var(--text);
+  border: none;
+  border-radius: 12px;
+  padding: 14px 22px;
+  font-size: 16px;
+  font-weight: 600;
+  font-family: var(--font);
+  min-height: 56px;
+  min-width: 96px;
+  cursor: pointer;
+}
+
+.controls button:active {
+  background: var(--accent);
+}

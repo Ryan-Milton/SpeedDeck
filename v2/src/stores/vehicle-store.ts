@@ -1,20 +1,18 @@
-// Zustand store for live vehicle/telemetry state pushed from the Rust backend.
-//
-// In the skeleton it only tracks the heartbeat tick. In Phase 2 this grows to
-// hold the normalized VehicleSample (position, speed, heading, altitude, fix
-// quality) emitted on the `vehicle:state` event from the Rust VehicleHub.
+// Zustand store holding the latest live telemetry pushed from the Rust backend
+// on the `vehicle:state` event. The CarPlay surfaces (Maps, Dashboard) read
+// from here in later phases.
 
 import { create } from "zustand";
+import type { VehicleState } from "../lib/ipc";
 
-export interface VehicleStore {
-  // --- skeleton heartbeat (removed once real telemetry lands) ---
-  tickCount: number;
-  tickMessage: string;
-  setTick: (count: number, message: string) => void;
+interface VehicleStore {
+  state: VehicleState | null;
+  connected: boolean;
+  setState: (state: VehicleState) => void;
 }
 
 export const useVehicleStore = create<VehicleStore>((set) => ({
-  tickCount: 0,
-  tickMessage: "",
-  setTick: (tickCount, tickMessage) => set({ tickCount, tickMessage }),
+  state: null,
+  connected: false,
+  setState: (state) => set({ state, connected: true }),
 }));

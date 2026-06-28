@@ -6,9 +6,23 @@ phone); maps are offline-first. See the repo root `README.md` for how this relat
 
 ## Status
 
-Skeleton (Phase 1). The frontend builds and the Tauri bridge (`ping` command + `tick` event) is
-wired up. Subsequent phases add the Rust GPS vehicle layer, the CarPlay shell, offline maps,
-turn-by-turn navigation, trips, music, and Steam Deck kiosk packaging.
+GPS spine (Phase 2). The Rust vehicle layer reads a USB NMEA receiver (or a built-in simulator),
+parses GGA/RMC/VTG, applies EMA smoothing, and emits live `vehicle:state` to the UI; trip
+recording control is wired (DB persistence lands in Phase 5). The frontend shows a live telemetry
+readout. Next: the CarPlay shell, offline maps, turn-by-turn nav, trips, music, kiosk packaging.
+
+### Vehicle data layer
+
+`src-tauri/src/vehicle/` is built around a `VehicleProvider` trait + `VehicleHub`. GPS is
+provider #1; OBD2 will be a second provider adding fields to `VehicleSample` with no downstream
+changes. By default the app uses the **live GPS** provider when a receiver is detected, else the
+**simulator**. Force the simulator with `SPEEDDECK_SIMULATOR=1`.
+
+The core logic (`geo`, `nmea`, `processor`, `simulator`) is ported from v1 and unit-tested:
+
+```bash
+cd v2/src-tauri && cargo test    # needs the system libs above to build the full crate
+```
 
 ## Prerequisites
 
