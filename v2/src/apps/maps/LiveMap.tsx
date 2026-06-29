@@ -53,6 +53,8 @@ export default function LiveMap() {
         addVehicleLayers(map, center);
         applyRoute(map);
         onlineRef.current = typeof style === "string";
+        // Ensure correct sizing when embedded in a smaller pane (Dashboard).
+        map.resize();
       });
     })();
 

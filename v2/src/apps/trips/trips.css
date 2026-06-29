@@ -3,6 +3,17 @@
   flex-direction: column;
 }
 
+.trips-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.trip-record {
+  display: flex;
+  gap: 10px;
+}
+
 .trips-body {
   margin-top: 16px;
   flex: 1;

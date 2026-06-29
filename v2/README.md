@@ -6,17 +6,16 @@ phone); maps are offline-first. See the repo root `README.md` for how this relat
 
 ## Status
 
-Local music (Phase 7). A Rust `media/` module scans `~/Music` (+ folders you add) for audio,
-reads tags/cover art via `lofty`, caches a SQLite library (`music.db`, FTS5 search), and plays via
-`rodio` on a dedicated thread with a queue, shuffle, repeat, and seek. The frontend adds a CarPlay
-**Music** browse surface (Albums/Artists/Songs + search, album art via `music-art://`) and a
-full-screen **Now Playing** (art + scrubber + transport + shuffle/repeat/volume); Settings manages
-scan folders. Audio decodes in Rust (not HTML5). Spotify is Phase 9.
+Dashboard split view (Phase 8). The Dashboard is now a CarPlay-style split: the live map on the
+left (~60%) and a right column with a **Now Playing** card (art + mini transport) and a glance card
+that shows the **next turn** while navigating, else current **speed** — composed live from the
+vehicle, navigation, and music stores. Tapping a pane opens the full app. Trip record/pause/stop
+moved into the Trips app.
 
 Earlier phases: Phase 2 GPS spine, Phase 3 CarPlay shell, Phase 4 offline maps, Phase 5 trip
 recording, Phase 6 turn-by-turn navigation (see
-[`docs/phase-6-navigation.md`](docs/phase-6-navigation.md)). Next: dashboard split-view, then
-Spotify + Steam Deck kiosk packaging.
+[`docs/phase-6-navigation.md`](docs/phase-6-navigation.md)), Phase 7 local music. Next: Spotify +
+Steam Deck kiosk packaging (Phase 9).
 
 ### Navigation data (off-device build)
 

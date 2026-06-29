@@ -1,7 +1,38 @@
 import { useEffect, useState } from "react";
 import { trips, type TripInfo } from "../../lib/trips";
+import { trip } from "../../lib/ipc";
 import { METERS_TO_MI } from "../../lib/units";
+import { useVehicleStore } from "../../stores/vehicle-store";
 import "./trips.css";
+
+// Record/pause/resume/stop control (relocated from the dashboard in Phase 8).
+function RecordControl() {
+  const status = useVehicleStore((s) => s.state?.tripStatus ?? "idle");
+  return (
+    <div className="trip-record">
+      {status === "idle" ? (
+        <button className="rec-btn start" onClick={() => trip.start().catch(() => {})}>
+          ● Record
+        </button>
+      ) : (
+        <>
+          {status === "recording" ? (
+            <button className="rec-btn" onClick={() => trip.pause().catch(() => {})}>
+              Pause
+            </button>
+          ) : (
+            <button className="rec-btn" onClick={() => trip.resume().catch(() => {})}>
+              Resume
+            </button>
+          )}
+          <button className="rec-btn stop" onClick={() => trip.stop().catch(() => {})}>
+            ■ Stop
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
 
 function fmtDate(iso: string): string {
   const d = new Date(iso);
@@ -86,7 +117,10 @@ export default function TripsApp() {
 
   return (
     <div className="app-screen trips">
-      <h2>Trips</h2>
+      <div className="trips-header">
+        <h2>Trips</h2>
+        <RecordControl />
+      </div>
       {error && <p className="muted">{error}</p>}
 
       <div className="trips-body">
