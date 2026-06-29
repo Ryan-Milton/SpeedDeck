@@ -82,6 +82,8 @@ pub struct DataProcessor {
     pub trip_max_speed: f64,
     pub trip_avg_speed: f64,
     trip_start: Option<Instant>,
+    /// Seconds accumulated in prior recording segments (excludes paused time).
+    trip_elapsed_before_pause: f64,
     trip_speed_sum: f64,
     trip_speed_count: u64,
 }
@@ -109,6 +111,7 @@ impl DataProcessor {
             trip_max_speed: 0.0,
             trip_avg_speed: 0.0,
             trip_start: None,
+            trip_elapsed_before_pause: 0.0,
             trip_speed_sum: 0.0,
             trip_speed_count: 0,
         }
@@ -213,8 +216,10 @@ impl DataProcessor {
             self.trip_avg_speed = self.trip_speed_sum / self.trip_speed_count as f64;
         }
 
+        // Duration excludes paused time: accumulated prior segments + the
+        // current running segment (if any).
         if let Some(start) = self.trip_start {
-            self.trip_duration = start.elapsed().as_secs_f64();
+            self.trip_duration = self.trip_elapsed_before_pause + start.elapsed().as_secs_f64();
         }
     }
 
@@ -225,21 +230,33 @@ impl DataProcessor {
         self.trip_max_speed = 0.0;
         self.trip_avg_speed = 0.0;
         self.trip_start = Some(Instant::now());
+        self.trip_elapsed_before_pause = 0.0;
         self.trip_speed_sum = 0.0;
         self.trip_speed_count = 0;
     }
 
     pub fn stop_trip(&mut self) {
         self.trip_status = TripStatus::Idle;
-        self.trip_start = None;
+        // Freeze the final duration, then stop the running segment.
+        if let Some(start) = self.trip_start.take() {
+            self.trip_elapsed_before_pause += start.elapsed().as_secs_f64();
+            self.trip_duration = self.trip_elapsed_before_pause;
+        }
     }
 
     pub fn pause_trip(&mut self) {
         self.trip_status = TripStatus::Paused;
+        // Bank the elapsed time of the current segment and stop the clock.
+        if let Some(start) = self.trip_start.take() {
+            self.trip_elapsed_before_pause += start.elapsed().as_secs_f64();
+            self.trip_duration = self.trip_elapsed_before_pause;
+        }
     }
 
     pub fn resume_trip(&mut self) {
         self.trip_status = TripStatus::Recording;
+        // Start a fresh segment; paused wall-clock is not counted.
+        self.trip_start = Some(Instant::now());
     }
 
     pub fn reset_session_max(&mut self) {
@@ -318,5 +335,28 @@ mod tests {
         p.process(&sample(0.1, 47.0, -122.0, None));
         let s = p.process(&sample(0.1, 47.01, -122.0, None));
         assert_eq!(s.trip_distance, 0.0);
+    }
+
+    #[test]
+    fn pause_excludes_paused_time_from_duration() {
+        use std::thread::sleep;
+        use std::time::Duration;
+        let mut p = DataProcessor::new();
+        p.start_trip();
+        sleep(Duration::from_millis(120));
+        let s = p.process(&sample(10.0, 47.0, -122.0, None));
+        assert!(s.trip_duration >= 0.1, "active segment counted: {}", s.trip_duration);
+
+        p.pause_trip();
+        let banked = p.trip_duration;
+        sleep(Duration::from_millis(250)); // paused — must NOT be counted
+        p.resume_trip();
+        let s = p.process(&sample(10.0, 47.001, -122.0, None));
+        // Duration ~= banked + a few ms of the new segment, well under banked + the pause gap.
+        assert!(
+            s.trip_duration < banked + 0.1,
+            "paused time leaked into duration: banked={banked}, got={}",
+            s.trip_duration
+        );
     }
 }

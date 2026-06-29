@@ -5,6 +5,7 @@ pub mod osrm;
 pub mod router;
 
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -180,20 +181,29 @@ pub async fn nav_download_region(
         );
     };
 
-    // Download the pack archive (zip of region.osrm* + places.db).
+    // Download the pack archive (zip of region.osrm* + places.db), streamed to
+    // disk chunk-by-chunk so a multi-hundred-MB region never sits fully in RAM.
     emit("download", 0);
-    let bytes = reqwest::Client::new()
+    let mut resp = reqwest::Client::new()
         .get(&url)
         .send()
         .await
         .map_err(|e| e.to_string())?
         .error_for_status()
-        .map_err(|e| e.to_string())?
-        .bytes()
-        .await
         .map_err(|e| e.to_string())?;
+    let total = resp.content_length();
     let zip_path = dir.join("pack.zip");
-    fs::write(&zip_path, &bytes).map_err(|e| e.to_string())?;
+    let mut out = fs::File::create(&zip_path).map_err(|e| e.to_string())?;
+    let mut downloaded: u64 = 0;
+    while let Some(chunk) = resp.chunk().await.map_err(|e| e.to_string())? {
+        out.write_all(&chunk).map_err(|e| e.to_string())?;
+        downloaded += chunk.len() as u64;
+        if let Some(t) = total.filter(|t| *t > 0) {
+            emit("download", ((downloaded.min(t) as f64 / t as f64) * 100.0) as u8);
+        }
+    }
+    out.flush().map_err(|e| e.to_string())?;
+    drop(out);
 
     // Extract.
     emit("extract", 0);

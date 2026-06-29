@@ -1,7 +1,5 @@
 //! Library scanner: walk folders, read tags + cover art via `lofty`, upsert.
 
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
 use lofty::file::TaggedFileExt;
@@ -110,10 +108,15 @@ fn read_meta(path: &Path, art_dir: &Path) -> Option<TrackMeta> {
     Some(m)
 }
 
+/// FNV-1a hash — stable across Rust versions (unlike DefaultHasher), so cached
+/// art keys stay valid across toolchain upgrades. No extra crate needed.
 fn hash_bytes(data: &[u8]) -> String {
-    let mut h = DefaultHasher::new();
-    data.hash(&mut h);
-    format!("{:016x}", h.finish())
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325; // FNV offset basis
+    for &b in data {
+        h ^= b as u64;
+        h = h.wrapping_mul(0x0000_0100_0000_01b3); // FNV prime
+    }
+    format!("{h:016x}")
 }
 
 #[cfg(test)]
@@ -127,5 +130,13 @@ mod tests {
         assert!(is_audio_file(Path::new("/m/a.opus")));
         assert!(!is_audio_file(Path::new("/m/cover.jpg")));
         assert!(!is_audio_file(Path::new("/m/readme")));
+    }
+
+    #[test]
+    fn fnv_hash_is_stable_and_known() {
+        // FNV-1a/64 of "hello" is a fixed, version-independent value.
+        assert_eq!(hash_bytes(b"hello"), "a430d84680aabd0b");
+        assert_eq!(hash_bytes(b"hello"), hash_bytes(b"hello"));
+        assert_ne!(hash_bytes(b"hello"), hash_bytes(b"world"));
     }
 }

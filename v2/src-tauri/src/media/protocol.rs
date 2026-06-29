@@ -12,11 +12,19 @@ pub fn art_root(app: &AppHandle) -> Option<PathBuf> {
 
 pub fn handle_album_art(app: &AppHandle, req: &Request<Vec<u8>>) -> Response<Vec<u8>> {
     let rel = req.uri().path().trim_start_matches('/');
-    if rel.is_empty() || rel.contains("..") {
-        return crate::maps::protocol::status(StatusCode::FORBIDDEN);
+    if rel.is_empty() {
+        return crate::maps::protocol::status(StatusCode::NOT_FOUND);
     }
-    match art_root(app) {
-        Some(dir) => crate::maps::protocol::serve_file(&dir.join(rel), req),
-        None => crate::maps::protocol::status(StatusCode::NOT_FOUND),
+    let Some(root) = art_root(app) else {
+        return crate::maps::protocol::status(StatusCode::NOT_FOUND);
+    };
+    // Path-traversal guard: the canonicalized target must stay under the art
+    // root (mirrors handle_tile_cache; defeats symlink/`..` escapes).
+    let path = root.join(rel);
+    match (root.canonicalize(), path.canonicalize()) {
+        (Ok(croot), Ok(cpath)) if cpath.starts_with(&croot) => {
+            crate::maps::protocol::serve_file(&cpath, req)
+        }
+        _ => crate::maps::protocol::status(StatusCode::NOT_FOUND),
     }
 }

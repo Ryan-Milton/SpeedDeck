@@ -181,7 +181,27 @@ impl TripStore {
     }
 
     pub fn get_trip(&self, trip_id: i64) -> Result<Option<TripInfo>, String> {
-        Ok(self.get_trips()?.into_iter().find(|t| t.id == trip_id))
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, name, started_at, ended_at, distance_m, max_speed, avg_speed
+                 FROM trips WHERE id = ?1",
+            )
+            .map_err(|e| e.to_string())?;
+        let mut rows = stmt
+            .query_map(params![trip_id], |r| {
+                Ok(TripInfo {
+                    id: r.get(0)?,
+                    name: r.get(1)?,
+                    started_at: r.get(2)?,
+                    ended_at: r.get(3)?,
+                    distance_m: r.get(4)?,
+                    max_speed: r.get(5)?,
+                    avg_speed: r.get(6)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        rows.next().transpose().map_err(|e| e.to_string())
     }
 
     pub fn get_trackpoints(&self, trip_id: i64) -> Result<Vec<Trackpoint>, String> {
