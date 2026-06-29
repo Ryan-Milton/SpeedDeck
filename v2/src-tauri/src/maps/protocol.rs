@@ -43,17 +43,16 @@ pub fn cache_root(app: &AppHandle) -> Option<PathBuf> {
 }
 
 /// First existing copy of `rel`, preferring bundled resources then app data.
+/// Path-traversal guarded: the canonicalized target must stay under the root it
+/// was resolved against (mirrors `handle_tile_cache`; defeats `..`/symlink/
+/// percent-encoded escapes out of the resource or app-data dirs).
 fn resolve_resource_or_data(app: &AppHandle, rel: &str) -> Option<PathBuf> {
-    if let Ok(res) = app.path().resource_dir() {
-        let p = res.join(rel);
-        if p.is_file() {
-            return Some(p);
-        }
-    }
-    if let Ok(data) = app.path().app_data_dir() {
-        let p = data.join(rel);
-        if p.is_file() {
-            return Some(p);
+    for root in [app.path().resource_dir(), app.path().app_data_dir()].into_iter().flatten() {
+        let p = root.join(rel);
+        if let (Ok(canon_root), Ok(canon_p)) = (root.canonicalize(), p.canonicalize()) {
+            if canon_p.starts_with(&canon_root) && canon_p.is_file() {
+                return Some(canon_p);
+            }
         }
     }
     None
