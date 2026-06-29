@@ -1,0 +1,10 @@
+# Rust build output
+/target
+
+# Tauri-generated schemas/code
+/gen
+
+# Bundled binaries & large map assets are produced by build steps
+/binaries
+/resources/*.pmtiles
+/resources/osrm

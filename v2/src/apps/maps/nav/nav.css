@@ -1,0 +1,230 @@
+/* Navigation overlays on top of the map. */
+
+.search-fab {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  background: rgba(28, 28, 30, 0.9);
+  backdrop-filter: blur(18px);
+  color: #fff;
+  border: none;
+  border-radius: 22px;
+  padding: 12px 28px;
+  font-size: 16px;
+  font-weight: 600;
+  font-family: var(--font);
+  min-height: 52px;
+  cursor: pointer;
+}
+
+/* Turn banner (top) */
+.turn-banner {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  background: rgba(10, 132, 255, 0.95);
+  border-radius: 20px;
+  padding: 16px 22px;
+}
+.turn-banner.imminent {
+  background: rgba(10, 132, 255, 1);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.35);
+}
+.turn-arrow {
+  flex: 0 0 auto;
+}
+.turn-text {
+  display: flex;
+  flex-direction: column;
+}
+.turn-dist {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+.turn-instruction {
+  font-size: 18px;
+  font-weight: 600;
+}
+.turn-then {
+  font-size: 14px;
+  opacity: 0.85;
+  margin-top: 2px;
+}
+
+/* Nav status bar (bottom) */
+.nav-statusbar {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  background: rgba(28, 28, 30, 0.92);
+  backdrop-filter: blur(18px);
+  border-radius: 20px;
+  padding: 12px 18px;
+}
+.nav-eta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.nav-eta-time {
+  font-size: 26px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.nav-eta-sub {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+.nav-end {
+  background: #ff453a;
+  color: #fff;
+  border: none;
+  border-radius: 14px;
+  padding: 12px 22px;
+  font-size: 16px;
+  font-weight: 600;
+  font-family: var(--font);
+  min-height: 52px;
+  cursor: pointer;
+}
+.speed-limit {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #fff;
+  color: #000;
+  border: 4px solid #ff453a;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+/* Route preview (bottom sheet) */
+.route-preview {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  right: 16px;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: rgba(28, 28, 30, 0.95);
+  backdrop-filter: blur(18px);
+  border-radius: 20px;
+  padding: 16px 22px;
+}
+.route-preview.calculating {
+  justify-content: center;
+  color: var(--text-muted);
+}
+.rp-info {
+  display: flex;
+  flex-direction: column;
+}
+.rp-dest {
+  font-size: 18px;
+  font-weight: 600;
+}
+.rp-meta {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+.rp-actions {
+  display: flex;
+  gap: 12px;
+}
+.rp-cancel,
+.rp-go {
+  border: none;
+  border-radius: 14px;
+  padding: 14px 26px;
+  font-size: 16px;
+  font-weight: 700;
+  font-family: var(--font);
+  min-height: 56px;
+  cursor: pointer;
+}
+.rp-cancel {
+  background: var(--surface-2);
+  color: #fff;
+}
+.rp-go {
+  background: #34c759;
+  color: #fff;
+}
+
+/* Search overlay (full surface) */
+.search-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  background: rgba(0, 0, 0, 0.92);
+  backdrop-filter: blur(8px);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+}
+.search-head {
+  display: flex;
+  gap: 12px;
+}
+.search-input {
+  flex: 1;
+  background: var(--surface-2);
+  border: none;
+  border-radius: 14px;
+  padding: 16px 18px;
+  font-size: 20px;
+  color: #fff;
+  font-family: var(--font);
+}
+.search-close {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 17px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.search-error {
+  margin-top: 10px;
+}
+.search-results {
+  margin-top: 16px;
+  list-style: none;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.search-result {
+  padding: 16px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sr-name {
+  font-size: 17px;
+}
+.sr-meta {
+  font-size: 13px;
+  color: var(--text-muted);
+}

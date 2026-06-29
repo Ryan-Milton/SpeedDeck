@@ -1,0 +1,36 @@
+[package]
+name = "speeddeck"
+version = "2.0.0"
+description = "CarPlay-style in-car infotainment for the Steam Deck"
+authors = ["SpeedDeck"]
+edition = "2021"
+rust-version = "1.77"
+
+# The Tauri app logic lives in a library so it can be reused (tests, future
+# mobile target); the binary is a thin launcher.
+[lib]
+name = "speeddeck_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+tauri-plugin-dialog = "2"
+rodio = { version = "0.20", features = ["symphonia-all"] }
+lofty = "0.22"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serialport = "4"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+tokio = { version = "1", features = ["time"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[features]
+# this feature is used for production builds or when a dev server is not
+# specified, DO NOT REMOVE!!
+custom-protocol = ["tauri/custom-protocol"]

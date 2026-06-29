@@ -1,0 +1,40 @@
+:root {
+  /* CarPlay-ish dark palette */
+  --bg: #000000;
+  --surface: #1c1c1e;
+  --surface-2: #2c2c2e;
+  --text: #ffffff;
+  --text-muted: #8e8e93;
+  --accent: #0a84ff;
+  --radius: 18px;
+  --font: -apple-system, "SF Pro Display", "SF Pro Text", "Helvetica Neue",
+    system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  overflow: hidden;
+  /* Disable the elastic/overscroll bounce in the webview */
+  overscroll-behavior: none;
+}
+
+.muted {
+  color: var(--text-muted);
+}

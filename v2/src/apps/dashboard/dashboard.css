@@ -1,0 +1,135 @@
+.dash-split {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 18px;
+}
+
+.dash-map {
+  position: relative;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: #1c1c1e;
+  cursor: pointer;
+}
+/* LiveMap fills the pane via its own position:absolute inset:0. */
+
+.dash-aside {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 18px;
+  min-height: 0;
+}
+
+.dash-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 20px;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+/* Now Playing card */
+.np-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: 1fr auto;
+  gap: 14px 16px;
+  align-items: center;
+}
+.np-card-art {
+  grid-row: 1 / 3;
+  width: 96px;
+  height: 96px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface-2);
+  display: grid;
+  place-items: center;
+}
+.np-card-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.np-card-fallback {
+  font-size: 40px;
+  color: var(--text-muted);
+}
+.np-card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.np-card-title {
+  font-size: 18px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.np-card-artist {
+  font-size: 14px;
+}
+.np-card-controls {
+  grid-column: 2;
+  display: flex;
+  gap: 10px;
+}
+.np-card-controls button {
+  background: var(--surface-2);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  width: 52px;
+  height: 52px;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+/* Glance card */
+.glance-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.glance-card.speed {
+  align-items: center;
+  justify-content: center;
+}
+.glance-speed {
+  font-size: 96px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+.glance-speed-unit {
+  font-size: 20px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.glance-heading {
+  margin-top: 6px;
+  font-size: 16px;
+}
+.glance-turn {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.glance-turn-text {
+  display: flex;
+  flex-direction: column;
+}
+.glance-dist {
+  font-size: 28px;
+  font-weight: 700;
+}
+.glance-instr {
+  font-size: 16px;
+  font-weight: 600;
+}
+.glance-eta {
+  margin-top: 14px;
+  font-size: 15px;
+}

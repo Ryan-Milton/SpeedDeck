@@ -1,0 +1,32 @@
+# Reproducible AppImage build for SpeedDeck v2 (Tauri 2 + React).
+# Modeled on v1/Dockerfile.build but for a Rust/Tauri webview app.
+#
+# Usage (BuildKit, writes the AppImage to ./dist):
+#   DOCKER_BUILDKIT=1 docker build -f Dockerfile.build --output type=local,dest=dist .
+#
+# NOTE: place the navigation sidecar at
+#   src-tauri/binaries/osrm-routed-x86_64-unknown-linux-gnu
+# before building, or remove bundle.externalBin for a nav-disabled build.
+
+FROM rust:1-bookworm AS builder
+
+# Tauri / WebKitGTK build dependencies + Node 20.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev \
+        libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev \
+        ca-certificates fuse libfuse2 \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# AppImage tooling (linuxdeploy) runs FUSE-less inside Docker.
+ENV APPIMAGE_EXTRACT_AND_RUN=1
+
+WORKDIR /app
+COPY . .
+
+RUN npm ci && npm run tauri:build
+
+# Export stage: only the AppImage artifact(s).
+FROM scratch AS export
+COPY --from=builder /app/src-tauri/target/release/bundle/appimage/*.AppImage /

@@ -1,4 +1,16 @@
-# Python
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Env
+.env
+.env.local
+
+# --- v1 (Python + Electron) ---
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -8,23 +20,14 @@ build/
 .build-venv/
 venv/
 .venv/
-
-# Data
 data/
-
-# Node / Electron
 node_modules/
-frontend/dist/
-frontend/out/
 
-# IDE
-.vscode/
-.idea/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Env
-.env
-.env.local
+# --- v2 (Tauri + React) ---
+v2/node_modules/
+v2/dist/
+v2/src-tauri/target/
+# Bundled binaries / large map assets are produced by build steps, not committed
+v2/src-tauri/binaries/
+v2/src-tauri/resources/*.pmtiles
+v2/src-tauri/resources/osrm/

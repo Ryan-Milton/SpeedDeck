@@ -1,0 +1,345 @@
+/* CarPlay shell layout + theming. */
+
+.shell {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  background: radial-gradient(120% 120% at 50% 0%, #15151a 0%, #000 70%);
+}
+
+/* --- Status bar --- */
+.statusbar {
+  flex: 0 0 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.status-left {
+  letter-spacing: -0.01em;
+}
+
+.status-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-muted);
+}
+
+.status-clock {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.gps-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+.gps-dot.ok {
+  background: #34c759;
+}
+.gps-dot.weak {
+  background: #ff9f0a;
+}
+.gps-dot.off {
+  background: #ff453a;
+}
+
+/* --- Body: dock + content --- */
+.shell-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 96px 1fr;
+}
+
+/* --- Dock --- */
+.dock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 0 18px;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.dock-apps {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.dock-btn {
+  width: 58px;
+  height: 58px;
+  border-radius: 15px;
+  border: none;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  color: #fff;
+  background: var(--surface-2);
+  transition: transform 0.08s ease;
+}
+.dock-btn:active {
+  transform: scale(0.92);
+}
+.dock-btn.active {
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.35);
+}
+.dock-btn.disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.dock-btn.home {
+  background: var(--surface-2);
+}
+
+.home-grid-glyph {
+  display: grid;
+  grid-template-columns: repeat(2, 9px);
+  grid-template-rows: repeat(2, 9px);
+  gap: 4px;
+}
+.home-grid-glyph i {
+  background: #fff;
+  border-radius: 2px;
+}
+
+/* --- Home grid --- */
+.content {
+  position: relative;
+  overflow: hidden;
+}
+
+.home-grid {
+  height: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  align-content: start;
+  gap: 26px 18px;
+  padding: 36px 40px;
+}
+
+.app-icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.app-icon.disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.app-glyph {
+  width: 76px;
+  height: 76px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+}
+.app-icon:active .app-glyph {
+  transform: scale(0.94);
+}
+
+.app-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+/* --- App screens --- */
+.app-screen {
+  position: absolute;
+  inset: 0;
+  padding: 28px 40px;
+}
+.app-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.app-screen h2 {
+  font-size: 34px;
+  font-weight: 700;
+}
+
+/* Dashboard */
+.dashboard {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 20px;
+  align-content: stretch;
+}
+.dash-tile {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.dash-speed {
+  align-items: center;
+  justify-content: center;
+  flex-direction: row;
+  gap: 12px;
+}
+.dash-big {
+  font-size: 140px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+.dash-unit {
+  font-size: 24px;
+  color: var(--text-muted);
+  align-self: flex-end;
+  margin-bottom: 28px;
+}
+.dash-col {
+  display: grid;
+  grid-template-rows: repeat(3, 1fr);
+  gap: 20px;
+}
+.dash-label {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+.dash-val {
+  font-size: 30px;
+  font-weight: 600;
+  display: block;
+}
+
+.dash-trip {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+.dash-rec {
+  display: flex;
+  gap: 10px;
+}
+.rec-btn {
+  background: var(--surface-2);
+  color: var(--text);
+  border: none;
+  border-radius: 12px;
+  padding: 12px 18px;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: var(--font);
+  min-height: 52px;
+  cursor: pointer;
+}
+.rec-btn.start {
+  background: #3a1c1f;
+  color: #ff453a;
+}
+.rec-btn.stop {
+  background: #ff453a;
+  color: #fff;
+}
+
+/* Settings */
+.settings-list {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.settings-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 16px 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 17px;
+}
+
+.settings {
+  overflow-y: auto;
+}
+
+.offline-maps {
+  margin-top: 28px;
+}
+.offline-maps h3 {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.badge {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 4px 10px;
+}
+.badge.ok {
+  color: #fff;
+  background: #248a3d;
+}
+
+.dl-progress {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dl-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.dl-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+.music-folder-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 70%;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.settings-actions {
+  margin-top: 20px;
+  display: flex;
+  gap: 12px;
+}
+.settings-actions button,
+.dl-progress button {
+  background: var(--surface-2);
+  color: var(--text);
+  border: none;
+  border-radius: 12px;
+  padding: 12px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: var(--font);
+  min-height: 48px;
+  cursor: pointer;
+}
