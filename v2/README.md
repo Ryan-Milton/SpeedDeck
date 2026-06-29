@@ -6,16 +6,35 @@ phone); maps are offline-first. See the repo root `README.md` for how this relat
 
 ## Status
 
-Dashboard split view (Phase 8). The Dashboard is now a CarPlay-style split: the live map on the
-left (~60%) and a right column with a **Now Playing** card (art + mini transport) and a glance card
-that shows the **next turn** while navigating, else current **speed** — composed live from the
-vehicle, navigation, and music stores. Tapping a pane opens the full app. Trip record/pause/stop
-moved into the Trips app.
+Steam Deck packaging + kiosk (Phase 9). The app bundles as an **AppImage** (real icons, kiosk
+fullscreen window) and ships a `setup-steamos.sh` installer that adds a udev rule for the USB GPS
+receiver (broadened vendor IDs, non-root `uaccess`), a **systemd user service**, and a
+udev-triggered **auto-launch on GPS connect** — with the "Add as Non-Steam Game" path as the
+Gaming-Mode fallback. (Spotify is deferred to a later phase.)
 
 Earlier phases: Phase 2 GPS spine, Phase 3 CarPlay shell, Phase 4 offline maps, Phase 5 trip
 recording, Phase 6 turn-by-turn navigation (see
-[`docs/phase-6-navigation.md`](docs/phase-6-navigation.md)), Phase 7 local music. Next: Spotify +
-Steam Deck kiosk packaging (Phase 9).
+[`docs/phase-6-navigation.md`](docs/phase-6-navigation.md)), Phase 7 local music, Phase 8 dashboard
+split view. The CarPlay surface set (Home, Maps, Music/Now Playing, Dashboard, Trips, Settings) is
+complete.
+
+## Build & install on the Steam Deck
+
+```bash
+cd v2
+# 1. Place the navigation sidecar (see docs/phase-6-navigation.md):
+#    src-tauri/binaries/osrm-routed-x86_64-unknown-linux-gnu
+# 2. Build the AppImage (needs webkit2gtk — run on the Deck / a Linux box / CI):
+./scripts/build-appimage.sh
+#    or, reproducibly via Docker:
+#    DOCKER_BUILDKIT=1 docker build -f Dockerfile.build --output type=local,dest=dist .
+# 3. Install on the Deck (Desktop Mode):
+./scripts/setup-steamos.sh   # finds the AppImage, installs udev + systemd-user + desktop entry
+```
+
+Auto-boot path is **Desktop Mode** (a udev rule starts the systemd user service when the GPS
+receiver is plugged in); Gaming Mode is the manual "non-Steam game" fallback. The build can't run
+in headless containers (no WebKitGTK).
 
 ### Navigation data (off-device build)
 
@@ -107,8 +126,9 @@ v2/
     └── src/{main.rs,lib.rs}
 ```
 
-## TODO before first bundle
+## Assets / notes
 
-- Add app icons: `npm run tauri icon path/to/icon.png` (generates `src-tauri/icons/`), then set
-  `bundle.active = true` in `tauri.conf.json`.
-- Supply SF Pro font / CarPlay-style icon assets (personal use only; not committed).
+- App icons are generated and `bundle.active = true` (Phase 9). To re-brand:
+  `npm run tauri icon path/to/icon.png` regenerates `src-tauri/icons/`.
+- Supply SF Pro font / CarPlay-style icon assets for full pixel fidelity (personal use only; not
+  committed).
