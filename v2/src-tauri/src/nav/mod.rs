@@ -227,6 +227,13 @@ pub fn nav_delete_region(
     osrm: State<'_, OsrmManager>,
     region_id: String,
 ) -> Result<(), String> {
+    // Validate against the manifest before any filesystem work — `region_dir`
+    // joins this onto the nav root, so an unvalidated `..`-laden id would let
+    // `remove_dir_all` escape the nav root (mirrors `nav_download_region`).
+    load_manifest(&app)
+        .into_iter()
+        .find(|r| r.id == region_id)
+        .ok_or("unknown region")?;
     if osrm.region().as_deref() == Some(region_id.as_str()) {
         osrm.stop();
     }
