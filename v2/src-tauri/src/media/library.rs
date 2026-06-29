@@ -165,6 +165,19 @@ impl LibraryStore {
         }
     }
 
+    /// Look up a track by its file path — stable across rescans (unlike the
+    /// AUTOINCREMENT id, which `replace_tracks` reassigns). The playback queue
+    /// keys on path so a rescan never orphans the currently-playing track.
+    pub fn track_by_path(&self, path: &str) -> Result<Option<TrackInfo>, String> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(&format!("{SELECT_TRACK} WHERE path=?1")).map_err(|e| e.to_string())?;
+        let mut rows = stmt.query_map(params![path], map_track).map_err(|e| e.to_string())?;
+        match rows.next() {
+            Some(r) => Ok(Some(r.map_err(|e| e.to_string())?)),
+            None => Ok(None),
+        }
+    }
+
     pub fn all_tracks(&self) -> Result<Vec<TrackInfo>, String> {
         self.query_tracks(&format!("{SELECT_TRACK} ORDER BY artist, album, disc_no, track_no"), [])
     }
@@ -334,5 +347,27 @@ mod tests {
         s.replace_tracks(&[meta("/m/b1.mp3", "B", "Y", "u", 1)]).unwrap();
         assert_eq!(s.track_count(), 1);
         assert_eq!(s.all_tracks().unwrap()[0].artist.as_deref(), Some("B"));
+    }
+
+    #[test]
+    fn track_by_path_survives_id_reassignment_on_rescan() {
+        let s = LibraryStore::open_in_memory().unwrap();
+        // Prepend a row so the second scan hands "/m/keep.mp3" a different id.
+        s.replace_tracks(&[meta("/m/keep.mp3", "A", "X", "Keep", 1)]).unwrap();
+        let id_before = s.track_by_path("/m/keep.mp3").unwrap().unwrap().id;
+
+        // Rescan inserts another track first → AUTOINCREMENT gives "/m/keep.mp3" a fresh id.
+        s.replace_tracks(&[
+            meta("/m/new.mp3", "B", "Y", "New", 1),
+            meta("/m/keep.mp3", "A", "X", "Keep", 1),
+        ])
+        .unwrap();
+
+        let after = s.track_by_path("/m/keep.mp3").unwrap().expect("path still resolves");
+        assert_eq!(after.title.as_deref(), Some("Keep"));
+        // The id changed (proving the queue must not key on it), but path is stable.
+        assert_ne!(after.id, id_before);
+        // The stale id no longer resolves — exactly the bug the queue would hit.
+        assert!(s.track(id_before).unwrap().is_none());
     }
 }

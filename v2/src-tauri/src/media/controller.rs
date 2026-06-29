@@ -48,7 +48,7 @@ pub fn advance(order_len: usize, pos: usize, repeat: RepeatMode, forward: bool) 
 }
 
 struct Inner {
-    queue: Vec<i64>,    // track ids
+    queue: Vec<String>, // track file paths (stable across library rescans)
     order: Vec<usize>,  // play order over `queue`
     pos: usize,         // index into `order`
     shuffle: bool,
@@ -116,11 +116,11 @@ impl MediaController {
 
     // --- playback entry points ---
 
-    pub fn play_queue(&self, ids: Vec<i64>, start: usize) {
+    pub fn play_queue(&self, paths: Vec<String>, start: usize) {
         {
             let mut inner = self.inner.lock().unwrap();
-            let n = ids.len();
-            inner.queue = ids;
+            let n = paths.len();
+            inner.queue = paths;
             inner.order = (0..n).collect();
             inner.pos = start.min(n.saturating_sub(1));
             if inner.shuffle {
@@ -132,18 +132,22 @@ impl MediaController {
     }
 
     pub fn play_album(&self, album: &str, artist: &str, start: usize) -> Result<(), String> {
-        let ids = self
+        let paths = self
             .store
             .tracks_by_album(album, artist)?
             .into_iter()
-            .map(|t| t.id)
+            .map(|t| t.path)
             .collect::<Vec<_>>();
-        self.play_queue(ids, start);
+        self.play_queue(paths, start);
         Ok(())
     }
 
     pub fn play_track(&self, id: i64) {
-        self.play_queue(vec![id], 0);
+        // Resolve the id to its path now (it's valid at enqueue time); the queue
+        // keys on path so a later rescan can't orphan it.
+        if let Ok(Some(track)) = self.store.track(id) {
+            self.play_queue(vec![track.path], 0);
+        }
     }
 
     pub fn pause(&self) {
@@ -225,21 +229,18 @@ impl MediaController {
     }
 
     fn current_path(&self) -> Option<PathBuf> {
-        let id = {
-            let inner = self.inner.lock().unwrap();
-            let track_idx = *inner.order.get(inner.pos)?;
-            *inner.queue.get(track_idx)?
-        };
-        self.store.track(id).ok().flatten().map(|t| PathBuf::from(t.path))
+        let inner = self.inner.lock().unwrap();
+        let track_idx = *inner.order.get(inner.pos)?;
+        inner.queue.get(track_idx).map(PathBuf::from)
     }
 
     fn current_track(&self) -> Option<TrackInfo> {
-        let id = {
+        let path = {
             let inner = self.inner.lock().unwrap();
             let track_idx = *inner.order.get(inner.pos)?;
-            *inner.queue.get(track_idx)?
+            inner.queue.get(track_idx)?.clone()
         };
-        self.store.track(id).ok().flatten()
+        self.store.track_by_path(&path).ok().flatten()
     }
 
     fn build_state(&self) -> MediaState {
