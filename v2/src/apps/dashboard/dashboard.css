@@ -1,29 +1,39 @@
 .dash-split {
+  height: 100%;
   display: grid;
   grid-template-columns: 1.6fr 1fr;
-  gap: 18px;
+  gap: var(--space-5);
+  overflow: hidden;
 }
 
 .dash-map {
   position: relative;
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   overflow: hidden;
-  background: #1c1c1e;
+  background: var(--surface);
+  border: 1px solid var(--hud-line-idle);
   cursor: pointer;
+}
+.dash-map.active {
+  border-color: var(--hud-line);
+}
+.dash-map-label {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-4);
+  z-index: 1;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
 }
 /* LiveMap fills the pane via its own position:absolute inset:0. */
 
 .dash-aside {
   display: grid;
-  grid-template-rows: 1fr 1fr;
-  gap: 18px;
+  grid-template-rows: auto 1fr;
+  gap: var(--space-5);
   min-height: 0;
 }
 
 .dash-card {
-  background: var(--surface);
-  border-radius: var(--radius);
-  padding: 20px;
   cursor: pointer;
   overflow: hidden;
 }
@@ -38,9 +48,9 @@
 }
 .np-card-art {
   grid-row: 1 / 3;
-  width: 96px;
-  height: 96px;
-  border-radius: 12px;
+  width: 88px;
+  height: 88px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   background: var(--surface-2);
   display: grid;
@@ -52,7 +62,7 @@
   object-fit: cover;
 }
 .np-card-fallback {
-  font-size: 40px;
+  font-size: 36px;
   color: var(--text-muted);
 }
 .np-card-meta {
@@ -62,29 +72,39 @@
   min-width: 0;
 }
 .np-card-title {
-  font-size: 18px;
+  font-family: var(--font-display);
+  font-size: var(--text-md);
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .np-card-artist {
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 .np-card-controls {
   grid-column: 2;
   display: flex;
-  gap: 10px;
+  gap: var(--space-2);
 }
 .np-card-controls button {
   background: var(--surface-2);
-  color: #fff;
-  border: none;
-  border-radius: 12px;
-  width: 52px;
-  height: 52px;
-  font-size: 18px;
+  color: var(--text);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  width: 50px;
+  height: 50px;
+  display: grid;
+  place-items: center;
   cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease-hud);
+}
+.np-card-controls button:active {
+  transform: scale(0.92);
+}
+.np-card-controls button:focus-visible {
+  outline: none;
+  box-shadow: var(--glow-accent);
 }
 
 /* Glance card */
@@ -96,40 +116,32 @@
 .glance-card.speed {
   align-items: center;
   justify-content: center;
-}
-.glance-speed {
-  font-size: 96px;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: -0.04em;
-}
-.glance-speed-unit {
-  font-size: 20px;
-  color: var(--text-muted);
-  font-weight: 600;
+  gap: var(--space-3);
 }
 .glance-heading {
-  margin-top: 6px;
-  font-size: 16px;
+  font-size: var(--text-2xs);
 }
 .glance-turn {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--space-4);
+  margin-top: var(--space-2);
 }
 .glance-turn-text {
   display: flex;
   flex-direction: column;
 }
 .glance-dist {
-  font-size: 28px;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 .glance-instr {
-  font-size: 16px;
+  font-size: var(--text-md);
   font-weight: 600;
 }
 .glance-eta {
-  margin-top: 14px;
-  font-size: 15px;
+  margin-top: var(--space-4);
+  font-size: var(--text-sm);
 }

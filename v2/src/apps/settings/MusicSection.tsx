@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { music } from "../../lib/music";
 import { useMusicStore } from "../../stores/music-store";
+import { HudPanel, SectionHeader, SettingsRow, ListRow, Button } from "../../components";
 
 // Settings > Music: scan folders, library stats, rescan. Mirrors OfflineMapsSection.
 export default function MusicSection() {
@@ -50,39 +51,42 @@ export default function MusicSection() {
   const scanningNow = scanning || (library != null && library.step !== "done");
 
   return (
-    <div className="offline-maps">
-      <h3>Music</h3>
-      <div className="settings-list">
-        {folders.length === 0 && <div className="settings-row muted">No folders configured</div>}
-        {folders.map((f) => (
-          <div className="settings-row" key={f}>
-            <span className="music-folder-path">{f}</span>
-            <button className="badge" onClick={() => removeFolder(f)}>
-              Remove
-            </button>
-          </div>
-        ))}
-        <div className="settings-row">
-          <span>Tracks</span>
-          <span className="muted">{count}</span>
+    <>
+      <SectionHeader title="Music" />
+      <HudPanel brackets={false} className="settings-panel">
+        <div className="settings-list">
+          {folders.length === 0 && (
+            <ListRow>
+              <span className="muted">No folders yet — add one below</span>
+            </ListRow>
+          )}
+          {folders.map((f) => (
+            <ListRow
+              key={f}
+              label={<span className="music-folder-path">{f}</span>}
+              value={
+                <Button size="sm" variant="ghost" onClick={() => removeFolder(f)}>
+                  Remove
+                </Button>
+              }
+            />
+          ))}
+          <SettingsRow label="Tracks" value={count} />
+          {scanningNow && library && (
+            <SettingsRow
+              label="Scanning…"
+              value={`${library.scanned}${library.total ? ` / ${library.total}` : ""}`}
+            />
+          )}
         </div>
-        {scanningNow && library && (
-          <div className="settings-row">
-            <span>Scanning…</span>
-            <span className="muted">
-              {library.scanned}
-              {library.total ? ` / ${library.total}` : ""}
-            </span>
-          </div>
-        )}
-      </div>
 
-      <div className="settings-actions">
-        <button onClick={addFolder}>Add folder</button>
-        <button onClick={rescan} disabled={scanningNow}>
-          {scanningNow ? "Scanning…" : "Rescan"}
-        </button>
-      </div>
-    </div>
+        <div className="settings-actions">
+          <Button onClick={addFolder}>Add folder</Button>
+          <Button onClick={rescan} disabled={scanningNow}>
+            {scanningNow ? "Scanning…" : "Rescan"}
+          </Button>
+        </div>
+      </HudPanel>
+    </>
   );
 }

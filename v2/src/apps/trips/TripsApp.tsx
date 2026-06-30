@@ -3,31 +3,29 @@ import { trips, type TripInfo } from "../../lib/trips";
 import { trip } from "../../lib/ipc";
 import { METERS_TO_MI } from "../../lib/units";
 import { useVehicleStore } from "../../stores/vehicle-store";
+import { HudPanel, Button, StatGroup, EmptyState, SettingsRow } from "../../components";
+import { TripsIcon } from "../icons";
 import "./trips.css";
 
-// Record/pause/resume/stop control (relocated from the dashboard in Phase 8).
+// Record/pause/resume/stop control.
 function RecordControl() {
   const status = useVehicleStore((s) => s.state?.tripStatus ?? "idle");
   return (
     <div className="trip-record">
       {status === "idle" ? (
-        <button className="rec-btn start" onClick={() => trip.start().catch(() => {})}>
-          ● Record
-        </button>
+        <Button variant="danger" onClick={() => trip.start().catch(() => {})}>
+          <span className="rec-dot" /> Record
+        </Button>
       ) : (
         <>
           {status === "recording" ? (
-            <button className="rec-btn" onClick={() => trip.pause().catch(() => {})}>
-              Pause
-            </button>
+            <Button onClick={() => trip.pause().catch(() => {})}>Pause</Button>
           ) : (
-            <button className="rec-btn" onClick={() => trip.resume().catch(() => {})}>
-              Resume
-            </button>
+            <Button onClick={() => trip.resume().catch(() => {})}>Resume</Button>
           )}
-          <button className="rec-btn stop" onClick={() => trip.stop().catch(() => {})}>
-            ■ Stop
-          </button>
+          <Button variant="danger" onClick={() => trip.stop().catch(() => {})}>
+            Stop
+          </Button>
         </>
       )}
     </div>
@@ -124,60 +122,56 @@ export default function TripsApp() {
       {error && <p className="muted">{error}</p>}
 
       <div className="trips-body">
-        <ul className="trip-list">
-          {list.length === 0 && <li className="muted trip-empty">No recorded trips yet</li>}
-          {list.map((t) => (
-            <li
-              key={t.id}
-              className={`trip-item ${selected?.id === t.id ? "active" : ""}`}
-              onClick={() => select(t)}
-            >
-              <span className="trip-name">{t.name ?? `Trip ${t.id}`}</span>
-              <span className="trip-meta">
-                {fmtDate(t.startedAt)} · {miles(t.distanceM)}
-              </span>
-            </li>
-          ))}
-        </ul>
+        {list.length === 0 ? (
+          <EmptyState
+            className="trip-list-empty"
+            icon={<TripsIcon size={40} />}
+            title="No trips yet"
+            sub="Hit Record to log your first drive — distance, speed, and route."
+          />
+        ) : (
+          <ul className="trip-list">
+            {list.map((t) => (
+              <li
+                key={t.id}
+                className={`trip-item ${selected?.id === t.id ? "active" : ""}`}
+                onClick={() => select(t)}
+              >
+                <span className="trip-name">{t.name ?? `Trip ${t.id}`}</span>
+                <span className="trip-meta">
+                  {fmtDate(t.startedAt)} · {miles(t.distanceM)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
 
-        <div className="trip-detail">
+        <HudPanel className="trip-detail">
           {selected ? (
             <>
+              <span className="hud-label">Trip</span>
               <h3>{selected.name ?? `Trip ${selected.id}`}</h3>
-              <div className="settings-list">
-                <div className="settings-row">
-                  <span>Started</span>
-                  <span className="muted">{fmtDate(selected.startedAt)}</span>
-                </div>
-                <div className="settings-row">
-                  <span>Duration</span>
-                  <span className="muted">{fmtDuration(selected.startedAt, selected.endedAt)}</span>
-                </div>
-                <div className="settings-row">
-                  <span>Distance</span>
-                  <span className="muted">{miles(selected.distanceM)}</span>
-                </div>
-                <div className="settings-row">
-                  <span>Max speed</span>
-                  <span className="muted">{(selected.maxSpeed * 2.23694).toFixed(0)} mph</span>
-                </div>
-                <div className="settings-row">
-                  <span>Trackpoints</span>
-                  <span className="muted">{pointCount ?? "…"}</span>
-                </div>
+              <div className="trip-stats">
+                <StatGroup label="Distance" value={(selected.distanceM * METERS_TO_MI).toFixed(1)} unit="mi" />
+                <StatGroup label="Max speed" value={(selected.maxSpeed * 2.23694).toFixed(0)} unit="mph" />
+                <StatGroup label="Duration" value={fmtDuration(selected.startedAt, selected.endedAt)} />
+              </div>
+              <div className="settings-list trip-meta-list">
+                <SettingsRow label="Started" value={fmtDate(selected.startedAt)} />
+                <SettingsRow label="Trackpoints" value={pointCount ?? "…"} />
               </div>
               <div className="trip-actions">
-                <button onClick={() => onExport(selected)}>Export GPX</button>
-                <button onClick={() => onRename(selected)}>Rename</button>
-                <button className="danger" onClick={() => onDelete(selected)}>
+                <Button onClick={() => onExport(selected)}>Export GPX</Button>
+                <Button onClick={() => onRename(selected)}>Rename</Button>
+                <Button variant="danger" onClick={() => onDelete(selected)}>
                   Delete
-                </button>
+                </Button>
               </div>
             </>
           ) : (
-            <p className="muted">Select a trip to see details.</p>
+            <EmptyState title="No trip selected" sub="Pick a trip on the left to see its stats." />
           )}
-        </div>
+        </HudPanel>
       </div>
     </div>
   );

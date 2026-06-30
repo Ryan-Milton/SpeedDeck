@@ -5,10 +5,19 @@ import {
   type AlbumInfo,
   type TrackInfo,
 } from "../../lib/music";
+import { prettyTitle } from "../../lib/track-name";
 import { useMusicStore } from "../../stores/music-store";
+import { Tabs, EmptyState, Button } from "../../components";
+import { MusicIcon } from "../icons";
 import "./music.css";
 
 type Tab = "albums" | "artists" | "songs";
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: "albums", label: "Albums" },
+  { id: "artists", label: "Artists" },
+  { id: "songs", label: "Songs" },
+];
 
 function fmtDur(ms: number | null): string {
   if (!ms) return "";
@@ -25,7 +34,7 @@ function AlbumArt({ artKey, size }: { artKey: string | null; size: number }) {
   );
 }
 
-// Phase 7: CarPlay Music browse — Albums / Artists / Songs + search.
+// Music browse — Albums / Artists / Songs + search.
 export default function MusicApp() {
   const [tab, setTab] = useState<Tab>("albums");
   const [query, setQuery] = useState("");
@@ -69,12 +78,13 @@ export default function MusicApp() {
   if (openAlbum) {
     return (
       <div className="app-screen music-app">
-        <button className="music-back" onClick={() => setOpenAlbum(null)}>
+        <Button variant="ghost" className="music-back" onClick={() => setOpenAlbum(null)}>
           ‹ Back
-        </button>
+        </Button>
         <div className="album-detail-head">
           <AlbumArt artKey={openAlbum.artKey} size={120} />
           <div>
+            <span className="hud-label">Album</span>
             <h2>{openAlbum.album}</h2>
             <p className="muted">{openAlbum.artist}</p>
           </div>
@@ -87,7 +97,7 @@ export default function MusicApp() {
               onClick={() => music.playAlbum(openAlbum.album, openAlbum.artist, i).catch(() => {})}
             >
               <span className="track-no">{t.trackNo ?? i + 1}</span>
-              <span className="track-title">{t.title ?? t.path}</span>
+              <span className="track-title">{prettyTitle(t)}</span>
               <span className="track-dur">{fmtDur(t.durationMs)}</span>
             </li>
           ))}
@@ -96,24 +106,20 @@ export default function MusicApp() {
     );
   }
 
+  const searching = query.trim().length >= 2;
+
   return (
     <div className="app-screen music-app">
       <div className="music-head">
-        <div className="music-tabs">
-          {(["albums", "artists", "songs"] as Tab[]).map((t) => (
-            <button
-              key={t}
-              className={`music-tab ${tab === t && !query ? "active" : ""}`}
-              onClick={() => {
-                setTab(t);
-                setQuery("");
-                setArtistFilter(null);
-              }}
-            >
-              {t[0].toUpperCase() + t.slice(1)}
-            </button>
-          ))}
-        </div>
+        <Tabs
+          tabs={TABS}
+          value={tab}
+          onChange={(t) => {
+            setTab(t);
+            setQuery("");
+            setArtistFilter(null);
+          }}
+        />
         <input
           className="music-search"
           placeholder="Search"
@@ -122,27 +128,41 @@ export default function MusicApp() {
         />
       </div>
 
-      {query.trim().length >= 2 ? (
-        <ul className="track-list">
-          {results.length === 0 && <li className="muted track-empty">No matches</li>}
-          {results.map((t) => (
-            <li key={t.id} className="track-row" onClick={() => music.playTrack(t.id).catch(() => {})}>
-              <span className="track-title">{t.title ?? t.path}</span>
-              <span className="track-sub muted">{t.artist ?? ""}</span>
-            </li>
-          ))}
-        </ul>
+      {searching ? (
+        results.length === 0 ? (
+          <EmptyState title="No matches" sub={`Nothing found for “${query.trim()}”.`} />
+        ) : (
+          <ul className="track-list">
+            {results.map((t) => (
+              <li key={t.id} className="track-row" onClick={() => music.playTrack(t.id).catch(() => {})}>
+                <span className="track-title">{prettyTitle(t)}</span>
+                <span className="track-sub muted">{t.artist ?? ""}</span>
+              </li>
+            ))}
+          </ul>
+        )
       ) : tab === "albums" ? (
-        <div className="album-grid">
-          {shownAlbums.length === 0 && <p className="muted">No albums — add music in Settings.</p>}
-          {shownAlbums.map((a) => (
-            <button key={`${a.album}|${a.artist}`} className="album-tile" onClick={() => openAlbumDetail(a)}>
-              <AlbumArt artKey={a.artKey} size={150} />
-              <span className="album-name">{a.album}</span>
-              <span className="album-artist muted">{a.artist}</span>
-            </button>
-          ))}
-        </div>
+        shownAlbums.length === 0 ? (
+          <EmptyState
+            icon={<MusicIcon size={40} />}
+            title="No music yet"
+            sub="Add a music folder in Settings to build your library."
+          />
+        ) : (
+          <div className="album-grid">
+            {shownAlbums.map((a) => (
+              <button
+                key={`${a.album}|${a.artist}`}
+                className="album-tile"
+                onClick={() => openAlbumDetail(a)}
+              >
+                <AlbumArt artKey={a.artKey} size={150} />
+                <span className="album-name">{a.album}</span>
+                <span className="album-artist muted">{a.artist}</span>
+              </button>
+            ))}
+          </div>
+        )
       ) : tab === "artists" ? (
         <ul className="track-list">
           {artists.map((a) => (
@@ -162,7 +182,7 @@ export default function MusicApp() {
         <ul className="track-list">
           {songs.map((t) => (
             <li key={t.id} className="track-row" onClick={() => music.playTrack(t.id).catch(() => {})}>
-              <span className="track-title">{t.title ?? t.path}</span>
+              <span className="track-title">{prettyTitle(t)}</span>
               <span className="track-sub muted">
                 {t.artist ?? ""} {t.album ? `· ${t.album}` : ""}
               </span>

@@ -1,5 +1,18 @@
 import { music, albumArtUrl, type RepeatMode } from "../../lib/music";
+import { prettyTitle } from "../../lib/track-name";
 import { useMusicStore } from "../../stores/music-store";
+import { HudFrame, IconButton, Slider, EmptyState } from "../../components";
+import {
+  PlayIcon,
+  PauseIcon,
+  PrevIcon,
+  NextIcon,
+  ShuffleIcon,
+  RepeatIcon,
+  RepeatOneIcon,
+  VolumeIcon,
+} from "./transport-icons";
+import { MusicIcon } from "../icons";
 import "./music.css";
 
 function fmt(ms: number): string {
@@ -8,9 +21,13 @@ function fmt(ms: number): string {
 }
 
 const NEXT_REPEAT: Record<RepeatMode, RepeatMode> = { off: "all", all: "one", one: "off" };
-const REPEAT_LABEL: Record<RepeatMode, string> = { off: "Repeat", all: "Repeat All", one: "Repeat One" };
+const REPEAT_LABEL: Record<RepeatMode, string> = {
+  off: "Repeat",
+  all: "Repeat all",
+  one: "Repeat one",
+};
 
-// Phase 7: full-screen Now Playing — art, transport, scrubber, shuffle/repeat/volume.
+// Full-screen Now Playing — framed art, HUD transport, scrubber, volume.
 export default function NowPlayingApp() {
   const state = useMusicStore((s) => s.state);
   const np = state?.nowPlaying ?? null;
@@ -18,7 +35,11 @@ export default function NowPlayingApp() {
   if (!state || !np) {
     return (
       <div className="app-screen now-playing empty">
-        <p className="muted">Nothing playing — pick a track in Music.</p>
+        <EmptyState
+          icon={<MusicIcon size={40} />}
+          title="Nothing playing"
+          sub="Pick a track in Music to start the soundtrack."
+        />
       </div>
     );
   }
@@ -29,64 +50,70 @@ export default function NowPlayingApp() {
 
   return (
     <div className="app-screen now-playing">
-      <div className="np-art">
+      <HudFrame active className="np-art">
         {art ? <img src={art} alt="" /> : <span className="album-art-fallback big">♪</span>}
-      </div>
+      </HudFrame>
 
       <div className="np-meta">
-        <h2 className="np-title">{np.title ?? np.path}</h2>
+        <span className="hud-label">Now Playing</span>
+        <h2 className="np-title">{prettyTitle(np)}</h2>
         <p className="np-artist">{np.artist ?? "Unknown artist"}</p>
-        <p className="np-album muted">{np.album ?? ""}</p>
+        {np.album && <p className="np-album muted">{np.album}</p>}
       </div>
 
       <div className="np-scrubber">
         <span className="np-time">{fmt(pos)}</span>
-        <input
-          type="range"
+        <Slider
+          ariaLabel="Seek"
+          value={Math.min(pos, dur || pos)}
           min={0}
           max={Math.max(dur, 1)}
-          value={Math.min(pos, dur || pos)}
-          onChange={(e) => music.seek(Number(e.target.value)).catch(() => {})}
+          onChange={(v) => music.seek(v).catch(() => {})}
         />
         <span className="np-time">{dur ? fmt(dur) : "--:--"}</span>
       </div>
 
       <div className="np-transport">
-        <button
-          className={`np-toggle ${state.shuffle ? "on" : ""}`}
+        <IconButton
+          on={state.shuffle}
+          aria-label="Shuffle"
           onClick={() => music.setShuffle(!state.shuffle).catch(() => {})}
         >
-          Shuffle
-        </button>
-        <button className="np-skip" onClick={() => music.prev().catch(() => {})}>
-          ⏮
-        </button>
-        <button
-          className="np-play"
+          <ShuffleIcon />
+        </IconButton>
+        <IconButton aria-label="Previous" onClick={() => music.prev().catch(() => {})}>
+          <PrevIcon />
+        </IconButton>
+        <IconButton
+          size="lg"
+          aria-label={state.isPlaying ? "Pause" : "Play"}
           onClick={() => (state.isPlaying ? music.pause() : music.resume()).catch(() => {})}
         >
-          {state.isPlaying ? "⏸" : "▶"}
-        </button>
-        <button className="np-skip" onClick={() => music.next().catch(() => {})}>
-          ⏭
-        </button>
-        <button
-          className={`np-toggle ${state.repeat !== "off" ? "on" : ""}`}
+          {state.isPlaying ? <PauseIcon /> : <PlayIcon />}
+        </IconButton>
+        <IconButton aria-label="Next" onClick={() => music.next().catch(() => {})}>
+          <NextIcon />
+        </IconButton>
+        <IconButton
+          on={state.repeat !== "off"}
+          aria-label={REPEAT_LABEL[state.repeat]}
           onClick={() => music.setRepeat(NEXT_REPEAT[state.repeat]).catch(() => {})}
         >
-          {REPEAT_LABEL[state.repeat]}
-        </button>
+          {state.repeat === "one" ? <RepeatOneIcon /> : <RepeatIcon />}
+        </IconButton>
       </div>
 
       <div className="np-volume">
-        <span className="muted">Vol</span>
-        <input
-          type="range"
+        <span className="np-vol-icon" aria-hidden>
+          <VolumeIcon />
+        </span>
+        <Slider
+          ariaLabel="Volume"
+          value={state.volume}
           min={0}
           max={1}
           step={0.01}
-          value={state.volume}
-          onChange={(e) => music.setVolume(Number(e.target.value)).catch(() => {})}
+          onChange={(v) => music.setVolume(v).catch(() => {})}
         />
       </div>
     </div>
