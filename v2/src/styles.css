@@ -1,14 +1,91 @@
+@import "./assets/fonts/fonts.css";
+
+/*
+ * SpeedDeck v2 — automotive game-HUD design system.
+ * Phosphor cyan on graphite-black, Saira display + Inter body.
+ * All semantic color / spacing / type / radius / motion lives here as tokens.
+ */
 :root {
-  /* CarPlay-ish dark palette */
-  --bg: #000000;
-  --surface: #1c1c1e;
-  --surface-2: #2c2c2e;
-  --text: #ffffff;
-  --text-muted: #8e8e93;
-  --accent: #0a84ff;
-  --radius: 18px;
-  --font: -apple-system, "SF Pro Display", "SF Pro Text", "Helvetica Neue",
-    system-ui, sans-serif;
+  /* ---- Color: graphite-black base ---- */
+  --bg: #070a0f;
+  --surface: #0e1218;
+  --surface-2: #161b23;
+  --surface-3: #1e242e;
+
+  /* Text */
+  --text: #eaf2f2;
+  --text-muted: #7e8a93;
+  --text-dim: #4c565e;
+
+  /* Phosphor cyan accent */
+  --accent: #2bd9cc;
+  --accent-press: #1fb3a8;
+  --accent-glow: rgba(43, 217, 204, 0.45);
+  --accent-soft: rgba(43, 217, 204, 0.12);
+
+  /* Functional HUD warning palette */
+  --ok: #34e39b;
+  --caution: #ffb020;
+  --alert: #ff4d4f;
+  --alert-soft: rgba(255, 77, 79, 0.16);
+
+  /* HUD chrome lines / glass */
+  --hud-line: rgba(43, 217, 204, 0.5);
+  --hud-line-idle: rgba(234, 242, 242, 0.12);
+  --glass: rgba(14, 18, 24, 0.72);
+  --glass-blur: blur(16px);
+
+  /* ---- Type ---- */
+  --font-display: "Saira", "Helvetica Neue", system-ui, sans-serif;
+  --font-body: "Inter", -apple-system, system-ui, "Helvetica Neue", sans-serif;
+
+  --text-2xs: 11px; /* tracked HUD micro-labels */
+  --text-xs: 13px;
+  --text-sm: 15px;
+  --text-md: 17px; /* body default */
+  --text-lg: 22px;
+  --text-xl: 30px;
+  --text-2xl: 44px;
+  --speed-sm: 64px;
+  --speed-md: 104px;
+  --speed-lg: 150px;
+
+  /* ---- Spacing (4px base) ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* ---- Radius (sharper, game-UI) ---- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  /* ---- Elevation / glow ---- */
+  --glow-accent: 0 0 0 1.5px var(--accent), 0 0 18px var(--accent-glow);
+  --shadow-panel: 0 12px 40px rgba(0, 0, 0, 0.55);
+
+  /* ---- Z-index scale ---- */
+  --z-fab: 10;
+  --z-overlay: 20;
+  --z-modal: 30;
+  --z-boot: 40;
+
+  /* ---- Motion ---- */
+  --ease-hud: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur-med: 240ms;
+  --dur-slow: 480ms;
+
+  /* legacy aliases (kept until all screens migrate) */
+  --radius: var(--radius-lg);
+  --font: var(--font-body);
 }
 
 * {
@@ -29,12 +106,69 @@ body,
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: var(--font);
+  font-family: var(--font-body);
+  font-size: var(--text-md);
   overflow: hidden;
-  /* Disable the elastic/overscroll bounce in the webview */
   overscroll-behavior: none;
+  /* Ambient game-HUD texture: a faint cyan grid + a soft top vignette. */
+  background-image: linear-gradient(
+      var(--hud-line-idle) 1px,
+      transparent 1px
+    ),
+    linear-gradient(90deg, var(--hud-line-idle) 1px, transparent 1px),
+    radial-gradient(120% 80% at 50% -10%, #10161f 0%, var(--bg) 60%);
+  background-size: 40px 40px, 40px 40px, 100% 100%;
+  background-position: center, center, center;
+}
+
+/* Numerals and display type share these helpers. */
+.hud-numeral {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.hud-label {
+  font-family: var(--font-display);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
 }
 
 .muted {
   color: var(--text-muted);
+}
+
+/* ---- Power-on boot sequence ---- */
+@keyframes hud-boot-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes hud-sweep {
+  from {
+    stroke-dashoffset: var(--sweep-len, 1000);
+  }
+}
+
+.boot-in {
+  animation: hud-boot-in var(--dur-slow) var(--ease-hud) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

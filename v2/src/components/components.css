@@ -1,0 +1,454 @@
+/* Shared HUD component styles. Every interactive element gets a visible cyan
+   focus ring so the UI is controller-navigable. */
+
+/* ---------------- HudFrame / HudPanel ---------------- */
+.hud-frame {
+  position: relative;
+}
+.hud-corner {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--hud-line-idle);
+  pointer-events: none;
+  transition: border-color var(--dur-med) var(--ease-hud);
+}
+.hud-corner.tl {
+  top: 0;
+  left: 0;
+  border-right: 0;
+  border-bottom: 0;
+}
+.hud-corner.tr {
+  top: 0;
+  right: 0;
+  border-left: 0;
+  border-bottom: 0;
+}
+.hud-corner.bl {
+  bottom: 0;
+  left: 0;
+  border-right: 0;
+  border-top: 0;
+}
+.hud-corner.br {
+  bottom: 0;
+  right: 0;
+  border-left: 0;
+  border-top: 0;
+}
+.active > .hud-corner {
+  border-color: var(--hud-line);
+}
+
+.hud-panel {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--hud-line-idle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+}
+.hud-panel.active {
+  border-color: var(--hud-line);
+  box-shadow: 0 0 24px -8px var(--accent-glow);
+}
+
+/* ---------------- Buttons ---------------- */
+.btn {
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  min-height: 48px;
+  padding: 0 var(--space-5);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease-hud),
+    background var(--dur-fast) var(--ease-hud);
+}
+.btn:active {
+  transform: scale(0.96);
+}
+.btn:focus-visible {
+  outline: none;
+  box-shadow: var(--glow-accent);
+}
+.btn.primary {
+  background: var(--accent);
+  color: #04201d;
+}
+.btn.primary:active {
+  background: var(--accent-press);
+}
+.btn.danger {
+  background: var(--alert-soft);
+  color: var(--alert);
+  border-color: rgba(255, 77, 79, 0.4);
+}
+.btn.ghost {
+  background: transparent;
+  color: var(--accent);
+}
+.btn.sm {
+  min-height: 38px;
+  font-size: var(--text-xs);
+  padding: 0 var(--space-3);
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ---------------- IconButton ---------------- */
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease-hud),
+    background var(--dur-fast) var(--ease-hud);
+}
+.icon-btn:active {
+  transform: scale(0.92);
+}
+.icon-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--glow-accent);
+}
+.icon-btn.lg {
+  width: 72px;
+  height: 72px;
+}
+.icon-btn.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--hud-line);
+}
+
+/* ---------------- Slider (styled native range) ---------------- */
+.hud-slider {
+  --pct: 0%;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 28px;
+  background: transparent;
+  cursor: pointer;
+}
+.hud-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(
+    to right,
+    var(--accent) var(--pct),
+    var(--surface-3) var(--pct)
+  );
+}
+.hud-slider::-moz-range-track {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+}
+.hud-slider::-moz-range-progress {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+}
+.hud-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: var(--text);
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+.hud-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 50%;
+  background: var(--text);
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+.hud-slider:focus-visible {
+  outline: none;
+}
+.hud-slider:focus-visible::-webkit-slider-thumb {
+  box-shadow: var(--glow-accent);
+}
+
+/* ---------------- Card ---------------- */
+.hud-card {
+  background: var(--surface);
+  border: 1px solid var(--hud-line-idle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+}
+
+/* ---------------- ListRow / SettingsRow ---------------- */
+.list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  transition: background var(--dur-fast) var(--ease-hud);
+}
+.list-row.tappable {
+  cursor: pointer;
+}
+.list-row.tappable:hover {
+  background: var(--surface-2);
+}
+.list-row.tappable:focus-visible {
+  outline: none;
+  box-shadow: var(--glow-accent);
+}
+.list-row.active {
+  border-color: var(--hud-line);
+  background: var(--accent-soft);
+}
+.list-row .row-label {
+  font-size: var(--text-md);
+  color: var(--text);
+}
+.list-row .row-value {
+  font-size: var(--text-md);
+  color: var(--text-muted);
+}
+.settings-list {
+  display: flex;
+  flex-direction: column;
+}
+.settings-list > .list-row + .list-row {
+  border-top: 1px solid var(--hud-line-idle);
+  border-radius: 0;
+}
+
+/* ---------------- Badge ---------------- */
+.badge {
+  font-family: var(--font-display);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px solid var(--hud-line-idle);
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+.badge.ok {
+  color: var(--ok);
+  border-color: rgba(52, 227, 155, 0.4);
+  background: rgba(52, 227, 155, 0.12);
+}
+.badge.alert {
+  color: var(--alert);
+  border-color: rgba(255, 77, 79, 0.4);
+  background: var(--alert-soft);
+}
+
+/* ---------------- SectionHeader ---------------- */
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: var(--space-6) 0 var(--space-3);
+}
+.section-header .sh-title {
+  font-family: var(--font-display);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.section-header .sh-rule {
+  flex: 1;
+  height: 1px;
+  background: var(--hud-line-idle);
+}
+
+/* ---------------- Tabs / SegmentedControl ---------------- */
+.hud-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--surface);
+  border: 1px solid var(--hud-line-idle);
+  border-radius: var(--radius-md);
+}
+.hud-tabs .tab {
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 10px 18px;
+  min-height: 40px;
+  cursor: pointer;
+  transition: color var(--dur-fast), background var(--dur-fast);
+}
+.hud-tabs .tab.active {
+  color: #04201d;
+  background: var(--accent);
+}
+.hud-tabs .tab:focus-visible {
+  outline: none;
+  box-shadow: var(--glow-accent);
+}
+
+/* ---------------- StatGroup (telemetry readout) ---------------- */
+.stat-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.stat-group .stat-value {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: var(--text-xl);
+  line-height: 1;
+  color: var(--text);
+}
+.stat-group .stat-unit {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  margin-left: 4px;
+}
+
+/* ---------------- EmptyState ---------------- */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-3);
+  padding: var(--space-10);
+  color: var(--text-muted);
+}
+.empty-state .es-icon {
+  color: var(--text-dim);
+  margin-bottom: var(--space-1);
+}
+.empty-state .es-title {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text);
+}
+.empty-state .es-sub {
+  font-size: var(--text-sm);
+  max-width: 320px;
+}
+
+/* ---------------- Gauge ---------------- */
+.gauge {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+}
+.gauge .gauge-arc {
+  filter: drop-shadow(0 0 6px var(--accent-glow));
+  transition: stroke-dasharray var(--dur-med) var(--ease-hud);
+}
+.gauge .gauge-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+.gauge .gauge-value {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: clamp(48px, 38%, var(--speed-md));
+  line-height: 0.9;
+  color: var(--text);
+  text-shadow: 0 0 18px var(--accent-glow);
+}
+.gauge .gauge-unit {
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+}
+
+/* ---------------- AppIcon (dock + launchpad tile) ---------------- */
+.app-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+.app-tile .tile-glyph {
+  position: relative;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+  transition: transform var(--dur-fast) var(--ease-hud),
+    box-shadow var(--dur-med) var(--ease-hud);
+}
+.app-tile:active .tile-glyph {
+  transform: scale(0.93);
+}
+.app-tile.focused .tile-glyph {
+  box-shadow: var(--glow-accent), 0 6px 16px rgba(0, 0, 0, 0.45);
+}
+.app-tile.current .tile-glyph {
+  box-shadow: 0 0 0 2px var(--accent), 0 0 18px var(--accent-glow);
+}
+.app-tile:focus-visible {
+  outline: none;
+}
+.app-tile:focus-visible .tile-glyph {
+  box-shadow: var(--glow-accent), 0 6px 16px rgba(0, 0, 0, 0.45);
+}
+.app-tile.disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.app-tile .tile-label {
+  font-family: var(--font-display);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.app-tile.current .tile-label {
+  color: var(--accent);
+}

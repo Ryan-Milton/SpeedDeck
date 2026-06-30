@@ -30,10 +30,11 @@ const VALID: AppId[] = [
   "settings",
 ];
 
+// `null` target = toggle the Launchpad (there is no Home screen anymore).
 function go(target: AppId | null) {
-  const { openApp, goHome } = useShellStore.getState();
+  const { openApp, toggleLaunchpad } = useShellStore.getState();
   if (target) openApp(target);
-  else goHome();
+  else toggleLaunchpad();
 }
 
 export function useDevNav() {

@@ -1,38 +1,63 @@
-import { APPS } from "../apps/registry";
+import { useLayoutEffect, useRef } from "react";
+import { APP_BY_ID } from "../apps/registry";
 import { useShellStore } from "../stores/shell-store";
+import { AppIcon } from "../components";
 
-// CarPlay's left dock: quick app shortcuts plus the home/grid button at the
-// bottom. Always visible alongside the active app.
+const DOCK_COUNT = 3; // most-recent apps shown in the dock
+
+// macOS-style floating dock: the current app (cyan ring) plus the two prior
+// apps, then a divider and the Launchpad button. Icons slide when the MRU
+// reorders (FLIP); the surfaced app content cross-fades separately.
 export default function Dock() {
-  const activeApp = useShellStore((s) => s.activeApp);
+  const mru = useShellStore((s) => s.mru);
   const openApp = useShellStore((s) => s.openApp);
-  const goHome = useShellStore((s) => s.goHome);
+  const toggleLaunchpad = useShellStore((s) => s.toggleLaunchpad);
+  const launchpadOpen = useShellStore((s) => s.launchpadOpen);
 
-  const dockApps = APPS.filter((a) => a.inDock);
+  const recent = mru.slice(0, DOCK_COUNT);
+  const railRef = useRef<HTMLDivElement>(null);
+  const prevRects = useRef<Map<string, DOMRect>>(new Map());
+
+  // FLIP: animate each tile from its previous position to the new one.
+  useLayoutEffect(() => {
+    const rail = railRef.current;
+    if (!rail) return;
+    const tiles = rail.querySelectorAll<HTMLElement>("[data-app]");
+    tiles.forEach((el) => {
+      const id = el.dataset.app!;
+      const prev = prevRects.current.get(id);
+      const next = el.getBoundingClientRect();
+      if (prev) {
+        const dx = prev.left - next.left;
+        if (dx) {
+          el.animate(
+            [{ transform: `translateX(${dx}px)` }, { transform: "translateX(0)" }],
+            { duration: 240, easing: "cubic-bezier(.2,.8,.2,1)" }
+          );
+        }
+      }
+      prevRects.current.set(id, next);
+    });
+  }, [mru]);
 
   return (
-    <nav className="dock">
-      <div className="dock-apps">
-        {dockApps.map((a) => (
-          <button
-            key={a.id}
-            className={`dock-btn ${activeApp === a.id ? "active" : ""} ${a.enabled ? "" : "disabled"}`}
-            style={{ background: `linear-gradient(160deg, ${a.gradient[0]}, ${a.gradient[1]})` }}
-            onClick={() => a.enabled && openApp(a.id)}
-            aria-label={a.label}
-            disabled={!a.enabled}
-          >
-            <a.Icon size={26} />
-          </button>
+    <nav className="dock" aria-label="App dock">
+      <div className="dock-rail" ref={railRef}>
+        {recent.map((id, i) => (
+          <div className="dock-slot" data-app={id} key={id}>
+            <AppIcon app={APP_BY_ID[id]} size={54} current={i === 0} onClick={() => openApp(id)} />
+          </div>
         ))}
       </div>
+      <span className="dock-divider" />
       <button
-        className={`dock-btn home ${activeApp === null ? "active" : ""}`}
-        onClick={goHome}
-        aria-label="Home"
+        className={`dock-launch${launchpadOpen ? " on" : ""}`}
+        onClick={toggleLaunchpad}
+        aria-label="Launchpad"
+        aria-expanded={launchpadOpen}
       >
-        <span className="home-grid-glyph">
-          <i /><i /><i /><i />
+        <span className="launch-glyph">
+          <i /><i /><i /><i /><i /><i /><i /><i /><i />
         </span>
       </button>
     </nav>
