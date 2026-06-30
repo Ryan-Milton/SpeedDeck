@@ -77,7 +77,7 @@ fn load_manifest(app: &AppHandle) -> Vec<ManifestRegion> {
 
 // --- DTOs ---
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct NavStatus {
     pub router_running: bool,
