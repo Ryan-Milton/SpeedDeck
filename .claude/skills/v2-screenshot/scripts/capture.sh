@@ -56,7 +56,7 @@ fi
 # Let the React view switch + repaint before capturing.
 sleep 1
 
-WID="$(swift "$SCRIPT_DIR/winid.swift" 2>/dev/null || true)"
+WID="$(swift "$SCRIPT_DIR/winid.swift" "$PID" 2>/dev/null || true)"
 if [ -z "$WID" ]; then
   echo "Could not locate the SpeedDeck window (is it minimized?)." >&2
   exit 1

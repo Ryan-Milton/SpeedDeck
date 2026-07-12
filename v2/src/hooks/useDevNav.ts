@@ -27,7 +27,6 @@ const VALID: AppId[] = [
   "dashboard",
   "nowplaying",
   "trips",
-  "phone",
   "settings",
 ];
 
