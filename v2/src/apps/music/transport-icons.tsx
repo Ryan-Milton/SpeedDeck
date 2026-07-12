@@ -1,5 +1,7 @@
+import type { ReactNode } from "react";
+
 // Small media-transport glyphs (24x24, currentColor) for the Now Playing UI.
-const S = ({ children }: { children: React.ReactNode }) => (
+const S = ({ children }: { children: ReactNode }) => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     {children}
   </svg>

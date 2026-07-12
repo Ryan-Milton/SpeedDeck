@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { TouchEvent } from "react";
 import { APPS } from "../apps/registry";
 import { useShellStore, type AppId } from "../stores/shell-store";
 import { AppIcon, HudPanel } from "../components";
@@ -12,6 +13,10 @@ function chunk<T>(arr: T[], n: number): T[][] {
   return out;
 }
 
+function focusOnPage(focus: number, page: number) {
+  return Math.min(APPS.length - 1, page * PER_PAGE + (focus % PER_PAGE));
+}
+
 // Centered modal app launcher. Shows every app in a paged 2x4 grid; selecting
 // one surfaces it (and closes). Touch-swipe or keyboard/d-pad to navigate.
 export default function Launchpad() {
@@ -20,12 +25,11 @@ export default function Launchpad() {
   const close = useShellStore((s) => s.closeLaunchpad);
 
   const pages = chunk(APPS, PER_PAGE);
-  const [page, setPage] = useState(0);
   // Flat index across all apps for roving keyboard focus.
   const [focus, setFocus] = useState(() => Math.max(0, APPS.findIndex((a) => a.id === current)));
+  const page = Math.floor(focus / PER_PAGE);
   const btnRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
-  useEffect(() => setPage(Math.floor(focus / PER_PAGE)), [focus]);
   useEffect(() => {
     btnRefs.current[focus]?.focus();
   }, [focus]);
@@ -59,12 +63,12 @@ export default function Launchpad() {
         case "PageDown":
         case "]":
           e.preventDefault();
-          setPage((p) => Math.min(pages.length - 1, p + 1));
+          setFocus((f) => focusOnPage(f, Math.min(pages.length - 1, Math.floor(f / PER_PAGE) + 1)));
           break;
         case "PageUp":
         case "[":
           e.preventDefault();
-          setPage((p) => Math.max(0, p - 1));
+          setFocus((f) => focusOnPage(f, Math.max(0, Math.floor(f / PER_PAGE) - 1)));
           break;
       }
     };
@@ -74,13 +78,13 @@ export default function Launchpad() {
 
   // Touch swipe between pages.
   const touchX = useRef<number | null>(null);
-  const onTouchStart = (e: React.TouchEvent) => (touchX.current = e.touches[0].clientX);
-  const onTouchEnd = (e: React.TouchEvent) => {
+  const onTouchStart = (e: TouchEvent) => (touchX.current = e.touches[0].clientX);
+  const onTouchEnd = (e: TouchEvent) => {
     if (touchX.current == null) return;
     const dx = e.changedTouches[0].clientX - touchX.current;
     if (Math.abs(dx) > 60) {
-      if (dx < 0) setPage((p) => Math.min(pages.length - 1, p + 1));
-      else setPage((p) => Math.max(0, p - 1));
+      if (dx < 0) setFocus((f) => focusOnPage(f, Math.min(pages.length - 1, Math.floor(f / PER_PAGE) + 1)));
+      else setFocus((f) => focusOnPage(f, Math.max(0, Math.floor(f / PER_PAGE) - 1)));
     }
     touchX.current = null;
   };
@@ -89,7 +93,9 @@ export default function Launchpad() {
 
   return (
     <div className="launchpad-scrim boot-in" onClick={close}>
-      <HudPanel className="launchpad" onClick={(e) => e.stopPropagation()}>
+      {/* Wrapper stops scrim-close clicks; the panel itself is not a button. */}
+      <div className="launchpad" onClick={(e) => e.stopPropagation()}>
+      <HudPanel>
         <div className="launchpad-head">
           <span className="hud-label">Applications</span>
         </div>
@@ -124,12 +130,13 @@ export default function Launchpad() {
                 key={i}
                 className={`lp-dot${i === page ? " active" : ""}`}
                 aria-label={`Page ${i + 1}`}
-                onClick={() => setPage(i)}
+                onClick={() => setFocus((f) => focusOnPage(f, i))}
               />
             ))}
           </div>
         )}
       </HudPanel>
+      </div>
     </div>
   );
 }
