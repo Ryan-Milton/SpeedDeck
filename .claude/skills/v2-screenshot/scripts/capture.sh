@@ -32,12 +32,18 @@ case "$SCREEN" in
     exit 2 ;;
 esac
 
-PID="$(pgrep -f 'target/debug/speeddeck' | head -1 || true)"
-if [ -z "$PID" ]; then
+PIDS=($(pgrep -f 'target/debug/speeddeck' || true))
+if [ "${#PIDS[@]}" -eq 0 ]; then
   echo "SpeedDeck dev app is not running. Start it first:" >&2
   echo "  cd v2 && SPEEDDECK_SIMULATOR=1 npm run tauri:dev" >&2
   exit 1
 fi
+if [ "${#PIDS[@]}" -gt 1 ]; then
+  echo "Multiple SpeedDeck dev apps are running. Close all but the intended instance and retry:" >&2
+  printf '  %s\n' "${PIDS[@]}" >&2
+  exit 1
+fi
+PID="${PIDS[0]}"
 
 # Bring the window forward and send the dev-nav keystroke.
 if ! osascript >/dev/null 2>&1 <<AS
