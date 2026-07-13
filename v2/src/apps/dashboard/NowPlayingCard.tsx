@@ -1,6 +1,9 @@
 import { music, albumArtUrl } from "../../lib/music";
+import { prettyTitle } from "../../lib/track-name";
 import { useMusicStore } from "../../stores/music-store";
 import { useShellStore } from "../../stores/shell-store";
+import { HudPanel } from "../../components";
+import { PlayIcon, PauseIcon, PrevIcon, NextIcon } from "../music/transport-icons";
 
 // Compact now-playing card. Body tap opens Now Playing; transport buttons don't.
 export default function NowPlayingCard() {
@@ -10,14 +13,15 @@ export default function NowPlayingCard() {
   const art = albumArtUrl(np?.artKey);
 
   return (
-    <div className="dash-card np-card" role="button" onClick={() => openApp("nowplaying")}>
+    <HudPanel className="np-card" onClick={() => openApp("nowplaying")}>
       <div className="np-card-art">
         {art ? <img src={art} alt="" /> : <span className="np-card-fallback">♪</span>}
       </div>
       <div className="np-card-meta">
+        <span className="hud-label">Now Playing</span>
         {np ? (
           <>
-            <span className="np-card-title">{np.title ?? np.path}</span>
+            <span className="np-card-title">{prettyTitle(np)}</span>
             <span className="np-card-artist muted">{np.artist ?? "Unknown artist"}</span>
           </>
         ) : (
@@ -26,18 +30,18 @@ export default function NowPlayingCard() {
       </div>
       <div className="np-card-controls" onClick={(e) => e.stopPropagation()}>
         <button onClick={() => music.prev().catch(() => {})} aria-label="Previous">
-          ⏮
+          <PrevIcon />
         </button>
         <button
           onClick={() => (state?.isPlaying ? music.pause() : music.resume()).catch(() => {})}
-          aria-label="Play/Pause"
+          aria-label={state?.isPlaying ? "Pause" : "Play"}
         >
-          {state?.isPlaying ? "⏸" : "▶"}
+          {state?.isPlaying ? <PauseIcon /> : <PlayIcon />}
         </button>
         <button onClick={() => music.next().catch(() => {})} aria-label="Next">
-          ⏭
+          <NextIcon />
         </button>
       </div>
-    </div>
+    </HudPanel>
   );
 }

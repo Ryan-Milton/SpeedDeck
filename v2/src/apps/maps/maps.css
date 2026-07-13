@@ -35,10 +35,11 @@
 }
 
 .pill {
-  background: rgba(28, 28, 30, 0.86);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border-radius: 18px;
+  background: var(--glass);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--hud-line-idle);
+  border-radius: var(--radius-md);
   padding: 10px 16px;
   display: flex;
   align-items: baseline;
@@ -46,11 +47,15 @@
 }
 
 .heading-pill .pill-big {
-  font-size: 26px;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
   font-weight: 700;
+  letter-spacing: 0.04em;
 }
 .heading-pill .pill-sub {
-  font-size: 18px;
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-variant-numeric: tabular-nums;
   color: var(--text-muted);
 }
 
@@ -58,17 +63,23 @@
   flex-direction: column;
   align-items: center;
   gap: 0;
-  padding: 10px 18px;
+  padding: 8px 18px;
 }
 .speed-pill .pill-speed {
-  font-size: 56px;
+  font-family: var(--font-display);
+  font-size: var(--speed-sm);
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
   line-height: 1;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
+  text-shadow: 0 0 16px var(--accent-glow);
 }
 .speed-pill .pill-unit {
-  font-size: 14px;
+  font-family: var(--font-display);
+  font-size: var(--text-2xs);
   font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   color: var(--text-muted);
 }
 
@@ -76,15 +87,25 @@
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  border: none;
-  background: rgba(28, 28, 30, 0.86);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  color: #fff;
+  border: 1px solid var(--hud-line-idle);
+  background: var(--glass);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  color: var(--text);
   display: grid;
   place-items: center;
   cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease-hud);
+}
+.map-fab:active {
+  transform: scale(0.93);
+}
+.map-fab:focus-visible {
+  outline: none;
+  box-shadow: var(--glow-accent);
 }
 .map-fab.active {
   background: var(--accent);
+  color: #04201d;
+  border-color: transparent;
 }

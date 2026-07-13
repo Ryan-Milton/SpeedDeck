@@ -1,172 +1,226 @@
-/* CarPlay shell layout + theming. */
+/* HUD shell: top status bar, surfaced app (cross-fade), floating dock, Launchpad. */
 
 .shell {
   height: 100%;
   width: 100%;
   display: flex;
   flex-direction: column;
-  background: radial-gradient(120% 120% at 50% 0%, #15151a 0%, #000 70%);
+  position: relative;
 }
 
-/* --- Status bar --- */
+/* --- Status bar (HUD strip) --- */
 .statusbar {
-  flex: 0 0 32px;
+  flex: 0 0 38px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 18px;
-  font-size: 14px;
-  font-weight: 600;
+  padding: 0 var(--space-5);
+  border-bottom: 1px solid var(--hud-line-idle);
+  position: relative;
+  z-index: 1;
+}
+.status-left {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--text-sm);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
   color: var(--text);
 }
-
-.status-left {
-  letter-spacing: -0.01em;
-}
-
 .status-right {
   display: flex;
   align-items: center;
-  gap: 10px;
-  color: var(--text-muted);
+  gap: var(--space-4);
 }
-
-.status-clock {
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
+.gps-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
-
 .gps-dot {
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: var(--text-muted);
+  background: var(--text-dim);
 }
 .gps-dot.ok {
-  background: #34c759;
+  background: var(--ok);
+  box-shadow: 0 0 8px var(--ok);
 }
 .gps-dot.weak {
-  background: #ff9f0a;
+  background: var(--caution);
+  box-shadow: 0 0 8px var(--caution);
 }
 .gps-dot.off {
-  background: #ff453a;
+  background: var(--alert);
 }
-
-/* --- Body: dock + content --- */
-.shell-body {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: 96px 1fr;
+.gps-label {
+  font-family: var(--font-display);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
-
-/* --- Dock --- */
-.dock {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 0 18px;
-  gap: 12px;
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.dock-apps {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.dock-btn {
-  width: 58px;
-  height: 58px;
-  border-radius: 15px;
-  border: none;
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  color: #fff;
-  background: var(--surface-2);
-  transition: transform 0.08s ease;
-}
-.dock-btn:active {
-  transform: scale(0.92);
-}
-.dock-btn.active {
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.35);
-}
-.dock-btn.disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-.dock-btn.home {
-  background: var(--surface-2);
-}
-
-.home-grid-glyph {
-  display: grid;
-  grid-template-columns: repeat(2, 9px);
-  grid-template-rows: repeat(2, 9px);
-  gap: 4px;
-}
-.home-grid-glyph i {
-  background: #fff;
-  border-radius: 2px;
-}
-
-/* --- Home grid --- */
-.content {
-  position: relative;
-  overflow: hidden;
-}
-
-.home-grid {
-  height: 100%;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  align-content: start;
-  gap: 26px 18px;
-  padding: 36px 40px;
-}
-
-.app-icon {
-  background: none;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-}
-.app-icon.disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.app-glyph {
-  width: 76px;
-  height: 76px;
-  border-radius: 18px;
-  display: grid;
-  place-items: center;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
-}
-.app-icon:active .app-glyph {
-  transform: scale(0.94);
-}
-
-.app-name {
-  font-size: 14px;
-  font-weight: 500;
+.status-clock {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-sm);
+  letter-spacing: 0.04em;
   color: var(--text);
 }
 
-/* --- App screens --- */
-.app-screen {
+/* --- Content area: surfaced app cross-fades on switch --- */
+.content {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+.content-screen {
   position: absolute;
   inset: 0;
-  padding: 28px 40px;
+  animation: hud-fade-in var(--dur-med) var(--ease-hud);
 }
+@keyframes hud-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* App-screen base (full-bleed apps like Maps set their own root). */
+.app-screen {
+  height: 100%;
+  padding: var(--space-6) var(--space-8);
+  padding-bottom: 104px; /* clear the floating dock */
+  overflow-y: auto;
+}
+.app-screen h2 {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+/* --- Floating dock --- */
+.dock {
+  position: absolute;
+  left: 50%;
+  bottom: var(--space-5);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--hud-line-idle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-panel);
+  z-index: var(--z-fab);
+}
+.dock-rail {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.dock-divider {
+  width: 1px;
+  align-self: stretch;
+  margin: 8px 2px;
+  background: var(--hud-line-idle);
+}
+.dock-launch {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease-hud),
+    box-shadow var(--dur-fast) var(--ease-hud);
+}
+.dock-launch:active {
+  transform: scale(0.93);
+}
+.dock-launch.on,
+.dock-launch:focus-visible {
+  outline: none;
+  box-shadow: var(--glow-accent);
+}
+.launch-glyph {
+  display: grid;
+  grid-template-columns: repeat(3, 5px);
+  grid-auto-rows: 5px;
+  gap: 3px;
+}
+.launch-glyph i {
+  background: var(--text-muted);
+  border-radius: 1px;
+}
+.dock-launch.on .launch-glyph i {
+  background: var(--accent);
+}
+
+/* --- Launchpad modal --- */
+.launchpad-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: grid;
+  place-items: center;
+  background: rgba(3, 6, 10, 0.6);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+.launchpad {
+  width: min(760px, 88%);
+}
+.launchpad-head {
+  text-align: center;
+  margin-bottom: var(--space-6);
+}
+.launchpad-viewport {
+  overflow: hidden;
+}
+.launchpad-track {
+  display: flex;
+  transition: transform var(--dur-med) var(--ease-hud);
+}
+.launchpad-page {
+  flex: 0 0 100%;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-8) var(--space-5);
+  justify-items: center;
+}
+.launchpad-dots {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-6);
+}
+.lp-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  border: none;
+  cursor: pointer;
+}
+.lp-dot.active {
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+/* =========================================================================
+   Legacy per-screen styles — migrated to per-app CSS in Phase C2.
+   Kept here so Dashboard / Trips / Settings render during the transition.
+   ========================================================================= */
 .app-placeholder {
   display: flex;
   flex-direction: column;
@@ -174,108 +228,16 @@
   justify-content: center;
   gap: 8px;
 }
-.app-screen h2 {
-  font-size: 34px;
-  font-weight: 700;
-}
-
-/* Dashboard */
-.dashboard {
-  display: grid;
-  grid-template-columns: 1.3fr 1fr;
-  gap: 20px;
-  align-content: stretch;
-}
-.dash-tile {
-  background: var(--surface);
-  border-radius: var(--radius);
-  padding: 22px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-.dash-speed {
-  align-items: center;
-  justify-content: center;
-  flex-direction: row;
-  gap: 12px;
-}
-.dash-big {
-  font-size: 140px;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: -0.04em;
-}
-.dash-unit {
-  font-size: 24px;
-  color: var(--text-muted);
-  align-self: flex-end;
-  margin-bottom: 28px;
-}
-.dash-col {
-  display: grid;
-  grid-template-rows: repeat(3, 1fr);
-  gap: 20px;
-}
-.dash-label {
-  font-size: 14px;
-  color: var(--text-muted);
-}
-.dash-val {
-  font-size: 30px;
-  font-weight: 600;
-  display: block;
-}
-
-.dash-trip {
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-}
-.dash-rec {
-  display: flex;
-  gap: 10px;
-}
-.rec-btn {
-  background: var(--surface-2);
-  color: var(--text);
-  border: none;
-  border-radius: 12px;
-  padding: 12px 18px;
-  font-size: 15px;
-  font-weight: 600;
-  font-family: var(--font);
-  min-height: 52px;
-  cursor: pointer;
-}
-.rec-btn.start {
-  background: #3a1c1f;
-  color: #ff453a;
-}
-.rec-btn.stop {
-  background: #ff453a;
-  color: #fff;
-}
-
-/* Settings */
-.settings-list {
-  margin-top: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.settings {
+  overflow-y: auto;
 }
 .settings-row {
   display: flex;
   justify-content: space-between;
   padding: 16px 4px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  font-size: 17px;
+  border-bottom: 1px solid var(--hud-line-idle);
+  font-size: var(--text-md);
 }
-
-.settings {
-  overflow-y: auto;
-}
-
 .offline-maps {
   margin-top: 28px;
 }
@@ -284,20 +246,6 @@
   font-weight: 600;
   margin-bottom: 8px;
 }
-
-.badge {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-muted);
-  background: var(--surface-2);
-  border-radius: 8px;
-  padding: 4px 10px;
-}
-.badge.ok {
-  color: #fff;
-  background: #248a3d;
-}
-
 .dl-progress {
   margin-top: 16px;
   display: flex;
@@ -315,7 +263,6 @@
   background: var(--accent);
   transition: width 0.2s ease;
 }
-
 .music-folder-path {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -324,22 +271,28 @@
   font-size: 14px;
   color: var(--text-muted);
 }
-
 .settings-actions {
   margin-top: 20px;
   display: flex;
   gap: 12px;
 }
-.settings-actions button,
-.dl-progress button {
+.rec-btn {
   background: var(--surface-2);
   color: var(--text);
   border: none;
-  border-radius: 12px;
-  padding: 12px 20px;
+  border-radius: var(--radius-md);
+  padding: 12px 18px;
   font-size: 15px;
   font-weight: 600;
-  font-family: var(--font);
-  min-height: 48px;
+  font-family: var(--font-display);
+  min-height: 52px;
   cursor: pointer;
+}
+.rec-btn.start {
+  background: var(--alert-soft);
+  color: var(--alert);
+}
+.rec-btn.stop {
+  background: var(--alert);
+  color: #fff;
 }

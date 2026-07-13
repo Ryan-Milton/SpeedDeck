@@ -10,7 +10,7 @@ function useClock(): string {
   return now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
-// CarPlay-style top status bar: brand/clock on the left, GPS signal on the right.
+// HUD top status bar: wordmark on the left, GPS chip + clock on the right.
 export default function StatusBar() {
   const time = useClock();
   const state = useVehicleStore((s) => s.state);
@@ -23,8 +23,10 @@ export default function StatusBar() {
     <div className="statusbar">
       <span className="status-left">SpeedDeck</span>
       <span className="status-right">
-        <span className={`gps-dot ${hasFix ? "ok" : connected ? "weak" : "off"}`} />
-        <span className="gps-sats">{connected ? `${sats} sat` : "no GPS"}</span>
+        <span className="gps-chip">
+          <span className={`gps-dot ${hasFix ? "ok" : connected ? "weak" : "off"}`} />
+          <span className="gps-label">{connected ? `${sats} sat · fix` : "no gps"}</span>
+        </span>
         <span className="status-clock">{time}</span>
       </span>
     </div>

@@ -5,6 +5,7 @@ import {
   type RegionInfo,
   type DownloadProgress,
 } from "../../lib/tiles";
+import { HudPanel, SectionHeader, SettingsRow, ListRow, Badge, Button } from "../../components";
 
 function fmtBytes(n: number): string {
   if (n <= 0) return "0 MB";
@@ -50,40 +51,47 @@ export default function OfflineMapsSection() {
   }
 
   return (
-    <div className="offline-maps">
-      <h3>Offline Maps</h3>
+    <>
+      <SectionHeader title="Offline Maps" />
+      <HudPanel brackets={false} className="settings-panel">
+        <div className="settings-list">
+          {regions.length === 0 && (
+            <ListRow>
+              <span className="muted">No regions yet</span>
+            </ListRow>
+          )}
+          {regions.map((r) => (
+            <ListRow
+              key={r.id}
+              label={r.name}
+              value={
+                <Badge variant={r.installed ? "ok" : undefined}>
+                  {r.installed ? "Installed" : "Not installed"}
+                </Badge>
+              }
+            />
+          ))}
+          <SettingsRow label="Tile cache" value={fmtBytes(cacheBytes)} />
+        </div>
 
-      <div className="settings-list">
-        {regions.length === 0 && <div className="settings-row muted">No regions reported</div>}
-        {regions.map((r) => (
-          <div className="settings-row" key={r.id}>
-            <span>{r.name}</span>
-            <span className={r.installed ? "badge ok" : "badge"}>
-              {r.installed ? "Installed" : "Not installed"}
+        {progress && (
+          <div className="dl-progress">
+            <div className="dl-bar">
+              <div className="dl-fill" style={{ width: `${progress.percent}%` }} />
+            </div>
+            <span className="muted">
+              Downloading tiles… {progress.downloaded}/{progress.total} ({progress.percent}%)
             </span>
+            <Button size="sm" onClick={() => tiles.cancel().catch(() => {})}>
+              Cancel
+            </Button>
           </div>
-        ))}
-        <div className="settings-row">
-          <span>Tile cache</span>
-          <span className="muted">{fmtBytes(cacheBytes)}</span>
-        </div>
-      </div>
+        )}
 
-      {progress && (
-        <div className="dl-progress">
-          <div className="dl-bar">
-            <div className="dl-fill" style={{ width: `${progress.percent}%` }} />
-          </div>
-          <span className="muted">
-            Downloading tiles… {progress.downloaded}/{progress.total} ({progress.percent}%)
-          </span>
-          <button onClick={() => tiles.cancel().catch(() => {})}>Cancel</button>
+        <div className="settings-actions">
+          <Button onClick={clearCache}>Clear tile cache</Button>
         </div>
-      )}
-
-      <div className="settings-actions">
-        <button onClick={clearCache}>Clear tile cache</button>
-      </div>
-    </div>
+      </HudPanel>
+    </>
   );
 }

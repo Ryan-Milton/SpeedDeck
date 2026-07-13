@@ -1,28 +1,24 @@
 import { useVehicleStore } from "../../stores/vehicle-store";
+import { HudPanel, SectionHeader, SettingsRow } from "../../components";
 import OfflineMapsSection from "./OfflineMapsSection";
 import MusicSection from "./MusicSection";
+import "./settings.css";
 
-// Settings/about surface. Grows with unit selection, music sources, etc. in
-// later phases.
+// Settings/about surface — grouped HUD panels.
 export default function SettingsApp() {
   const state = useVehicleStore((s) => s.state);
   return (
     <div className="app-screen settings">
       <h2>Settings</h2>
-      <div className="settings-list">
-        <div className="settings-row">
-          <span>GPS source</span>
-          <span className="muted">{state?.source ?? "waiting…"}</span>
+
+      <SectionHeader title="System" />
+      <HudPanel brackets={false} className="settings-panel">
+        <div className="settings-list">
+          <SettingsRow label="GPS source" value={state?.source ?? "waiting…"} />
+          <SettingsRow label="Fix quality" value={state ? state.fix.fixQuality : "—"} />
+          <SettingsRow label="Version" value="SpeedDeck v2.0.0" />
         </div>
-        <div className="settings-row">
-          <span>Fix quality</span>
-          <span className="muted">{state ? state.fix.fixQuality : "—"}</span>
-        </div>
-        <div className="settings-row">
-          <span>Version</span>
-          <span className="muted">SpeedDeck v2.0.0</span>
-        </div>
-      </div>
+      </HudPanel>
 
       <OfflineMapsSection />
       <MusicSection />

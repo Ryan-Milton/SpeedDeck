@@ -10,8 +10,9 @@ import {
 } from "../../lib/units";
 import { maneuverInstruction } from "../../lib/nav-utils";
 import ManeuverArrow from "../maps/nav/ManeuverArrow";
+import { HudPanel, Gauge } from "../../components";
 
-// Next-turn while navigating; otherwise a big current-speed glance. Tap → Maps.
+// Next-turn while navigating; otherwise the speed gauge. Tap → Maps.
 export default function GlanceCard() {
   const veh = useVehicleStore((s) => s.state);
   const status = useNavigationStore((s) => s.status);
@@ -25,7 +26,8 @@ export default function GlanceCard() {
   if (status === "navigating" && route) {
     const next = route.steps[activeStepIndex + 1] ?? route.steps[activeStepIndex];
     return (
-      <div className="dash-card glance-card" role="button" onClick={() => openApp("maps")}>
+      <HudPanel className="glance-card" onClick={() => openApp("maps")}>
+        <span className="hud-label">Next turn</span>
         <div className="glance-turn">
           <ManeuverArrow type={next?.maneuver.type ?? "straight"} modifier={next?.maneuver.modifier} size={40} />
           <div className="glance-turn-text">
@@ -36,17 +38,17 @@ export default function GlanceCard() {
           </div>
         </div>
         <span className="glance-eta muted">ETA {eta || "--:--"}</span>
-      </div>
+      </HudPanel>
     );
   }
 
   const speed = veh ? Math.round(speedConvert(veh.smoothedSpeed, unit)) : 0;
   const heading = veh ? `${Math.round(veh.fix.heading)}° ${cardinalDirection(veh.fix.heading)}` : "—";
+  const max = unit === "kmh" ? 200 : 120;
   return (
-    <div className="dash-card glance-card speed" role="button" onClick={() => openApp("maps")}>
-      <span className="glance-speed">{speed}</span>
-      <span className="glance-speed-unit">{speedUnitLabel(unit)}</span>
-      <span className="glance-heading muted">{heading}</span>
-    </div>
+    <HudPanel className="glance-card speed" onClick={() => openApp("maps")}>
+      <Gauge value={speed} max={max} unit={speedUnitLabel(unit)} label="Speed" size={232} />
+      <span className="glance-heading hud-label">{heading}</span>
+    </HudPanel>
   );
 }
