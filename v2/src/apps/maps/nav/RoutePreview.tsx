@@ -1,6 +1,7 @@
 import { useNavigationStore } from "../../../stores/navigation-store";
 import { useSettingsStore } from "../../../stores/settings-store";
 import { formatNavDistance } from "../../../lib/units";
+import { nav } from "../../../lib/nav";
 
 function fmtDuration(sec: number): string {
   const mins = Math.round(sec / 60);
@@ -17,6 +18,11 @@ export default function RoutePreview() {
   const start = useNavigationStore((s) => s.startNavigation);
   const stop = useNavigationStore((s) => s.stopNavigation);
   const unit = useSettingsStore((s) => s.speedUnit);
+
+  function startNavigation() {
+    void nav.noteActivity().catch(() => {});
+    start();
+  }
 
   if (isCalculating) {
     return <div className="route-preview calculating">Calculating route…</div>;
@@ -35,7 +41,7 @@ export default function RoutePreview() {
         <button className="rp-cancel" onClick={stop}>
           Cancel
         </button>
-        <button className="rp-go" onClick={start}>
+        <button className="rp-go" onClick={startNavigation}>
           Go
         </button>
       </div>

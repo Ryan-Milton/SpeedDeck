@@ -5,7 +5,7 @@ mod nav;
 mod trips;
 mod vehicle;
 
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 use maps::downloader::DownloadManager;
 use media::{LibraryStore, MediaController};
@@ -31,63 +31,96 @@ async fn ping(name: String) -> Result<String, String> {
 
 #[tauri::command]
 fn trip_start(
+    app: tauri::AppHandle,
     hub: tauri::State<'_, VehicleHub>,
     recorder: tauri::State<'_, TripRecorder>,
 ) -> Result<i64, String> {
+    let trip_gate = hub.trip_gate();
+    let _transition = trip_gate.lock().unwrap();
     let id = recorder.start()?;
     hub.processor().lock().unwrap().start_trip();
+    let _ = app.emit("trip:status", "recording");
     Ok(id)
 }
 
 #[tauri::command]
 fn trip_stop(
+    app: tauri::AppHandle,
     hub: tauri::State<'_, VehicleHub>,
     recorder: tauri::State<'_, TripRecorder>,
 ) -> Result<(), String> {
+    let trip_gate = hub.trip_gate();
+    let _transition = trip_gate.lock().unwrap();
     let (distance, max_speed, avg_speed) = {
         let p = hub.processor();
         let p = p.lock().unwrap();
         (p.trip_distance, p.trip_max_speed, p.trip_avg_speed)
     };
+    recorder.stop(distance, max_speed, avg_speed)?;
     hub.processor().lock().unwrap().stop_trip();
-    recorder.stop(distance, max_speed, avg_speed)
+    let _ = app.emit("trip:status", "idle");
+    Ok(())
 }
 
 #[tauri::command]
-fn trip_pause(hub: tauri::State<'_, VehicleHub>, recorder: tauri::State<'_, TripRecorder>) {
+fn trip_pause(
+    app: tauri::AppHandle,
+    hub: tauri::State<'_, VehicleHub>,
+    recorder: tauri::State<'_, TripRecorder>,
+) -> Result<(), String> {
+    let trip_gate = hub.trip_gate();
+    let _transition = trip_gate.lock().unwrap();
+    recorder.pause()?;
     hub.processor().lock().unwrap().pause_trip();
-    recorder.pause();
+    let _ = app.emit("trip:status", "paused");
+    Ok(())
 }
 
 #[tauri::command]
-fn trip_resume(hub: tauri::State<'_, VehicleHub>, recorder: tauri::State<'_, TripRecorder>) {
+fn trip_resume(
+    app: tauri::AppHandle,
+    hub: tauri::State<'_, VehicleHub>,
+    recorder: tauri::State<'_, TripRecorder>,
+) -> Result<(), String> {
+    let trip_gate = hub.trip_gate();
+    let _transition = trip_gate.lock().unwrap();
+    recorder.resume()?;
     hub.processor().lock().unwrap().resume_trip();
-    recorder.resume();
+    let _ = app.emit("trip:status", "recording");
+    Ok(())
 }
 
-/// Pick the telemetry providers. Live GPS when a receiver is detected (unless
-/// `SPEEDDECK_SIMULATOR=1` forces the simulator); otherwise the simulator so the
-/// app is useful without hardware.
+/// Pick the telemetry providers. Production always starts the live GPS provider
+/// so it can report disconnected/no-fix health and discover receivers later.
+/// Simulation is available only through the explicit development override.
 fn build_providers() -> Vec<Box<dyn VehicleProvider>> {
     let force_sim = std::env::var("SPEEDDECK_SIMULATOR")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
 
-    if !force_sim {
-        if let Some(port) = detect_port() {
-            return vec![Box::new(GpsProvider {
-                port,
-                baud: DEFAULT_BAUD,
-                update_hz: DEFAULT_UPDATE_HZ,
-            })];
-        }
+    if force_sim {
+        return vec![Box::new(SimulatorProvider::new())];
     }
-    vec![Box::new(SimulatorProvider::new())]
+
+    let port_override = std::env::var("SPEEDDECK_GPS_PORT")
+        .ok()
+        .filter(|port| !port.trim().is_empty());
+    let baud = std::env::var("SPEEDDECK_GPS_BAUD")
+        .ok()
+        .and_then(|value| value.parse::<u32>().ok())
+        .filter(|baud| *baud > 0)
+        .unwrap_or(DEFAULT_BAUD);
+    vec![Box::new(GpsProvider {
+        port: port_override.clone().or_else(detect_port),
+        port_is_override: port_override.is_some(),
+        baud,
+        update_hz: DEFAULT_UPDATE_HZ,
+    })]
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         // Range-capable asset protocols (replace v1 Electron handlers).
@@ -124,6 +157,7 @@ pub fn run() {
             trips::trip_export_gpx,
             nav::nav_status,
             nav::calculate_route,
+            nav::nav_note_activity,
             nav::geocode_search,
             nav::nav_list_regions,
             nav::nav_download_region,
@@ -155,27 +189,18 @@ pub fn run() {
             let store = TripStore::open(&data_dir.join("trips.db")).expect("open trip database");
             let recorder = TripRecorder::new(store);
 
-            let hub = VehicleHub::start(
-                app.handle().clone(),
-                build_providers(),
-                recorder.clone(),
-            );
+            let hub = VehicleHub::start(app.handle().clone(), build_providers(), recorder.clone());
             app.manage(recorder);
             app.manage(hub);
 
-            // Auto-start routing for an already-installed region.
-            let nav_app = app.handle().clone();
-            let osrm = app.state::<OsrmManager>().inner().clone();
-            tauri::async_runtime::spawn(nav::autostart(nav_app, osrm));
-
-            // Music: open the library, seed ~/Music, start the controller, and
-            // kick a background scan.
+            // Music: reopen the persisted library. Only the initial population
+            // scans recursively; later updates are user-triggered from Settings.
             let library = LibraryStore::open(&data_dir.join("music.db")).expect("open music db");
             media::ensure_default_folder(app.handle(), &library);
             let controller = MediaController::new(app.handle().clone(), library.clone());
             app.manage(controller);
             app.manage(library.clone());
-            {
+            if library.needs_initial_scan() {
                 let scan_app = app.handle().clone();
                 let scan_lib = library;
                 tauri::async_runtime::spawn_blocking(move || {
@@ -189,6 +214,38 @@ pub fn run() {
             }
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running SpeedDeck");
+        .build(tauri::generate_context!())
+        .expect("error while building SpeedDeck");
+
+    app.run(|app_handle, event| {
+        if matches!(
+            event,
+            tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
+        ) {
+            if let (Some(hub), Some(recorder)) = (
+                app_handle.try_state::<VehicleHub>(),
+                app_handle.try_state::<TripRecorder>(),
+            ) {
+                let trip_gate = hub.trip_gate();
+                let _transition = trip_gate.lock().unwrap();
+                let (distance, max_speed, avg_speed) = {
+                    let processor = hub.processor();
+                    let mut processor = processor.lock().unwrap();
+                    processor.stop_trip();
+                    (
+                        processor.trip_distance,
+                        processor.trip_max_speed,
+                        processor.trip_avg_speed,
+                    )
+                };
+                if let Err(error) = recorder.stop(distance, max_speed, avg_speed) {
+                    eprintln!("failed to finalize trip during shutdown: {error}");
+                }
+                hub.stop();
+            }
+            if let Some(osrm) = app_handle.try_state::<OsrmManager>() {
+                tauri::async_runtime::block_on(osrm.stop());
+            }
+        }
+    });
 }

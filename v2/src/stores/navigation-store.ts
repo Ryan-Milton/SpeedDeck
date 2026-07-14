@@ -5,7 +5,9 @@ import { create } from "zustand";
 import type { SearchResult, RouteData } from "../types/navigation";
 import {
   findNearestRoutePoint,
-  distanceAlongCoordsFromProjection,
+  findNearestRoutePointFromCursor,
+  buildCumulativeDistances,
+  distanceAlongCumulativeFromProjection,
   computeBearing,
   computeOffRouteScore,
 } from "../lib/nav-utils";
@@ -34,8 +36,10 @@ interface NavigationState {
   searchQuery: string;
   isSearchOpen: boolean;
   isCalculating: boolean;
+  routeRequestGeneration: number;
 
   osrmReady: boolean;
+  osrmError: string | null;
 
   setSearchOpen: (open: boolean) => void;
   setSearchQuery: (query: string) => void;
@@ -53,27 +57,51 @@ interface NavigationState {
     hdop?: number | null
   ) => void;
   setOsrmReady: (ready: boolean) => void;
+  setOsrmStatus: (ready: boolean, error: string | null) => void;
   setIsCalculating: (calc: boolean) => void;
+  beginRouteRequest: () => number;
+  isRouteRequestCurrent: (generation: number) => boolean;
+  applyRouteRequest: (generation: number, route: RouteData) => boolean;
+  finishRouteRequest: (generation: number) => void;
+  cancelRouteRequests: () => void;
+}
+
+interface RouteCache {
+  cumulativeDistances: number[];
+  stepRanges: { start: number; end: number }[];
+  nearestSegmentCursor: number;
 }
 
 function buildStepCoordRanges(route: RouteData): { start: number; end: number }[] {
   const routeCoords = route.geometry.coordinates;
   const ranges: { start: number; end: number }[] = [];
+  const coordIndices = new Map<string, number[]>();
+  for (let i = 0; i < routeCoords.length; i++) {
+    const key = `${routeCoords[i][0]},${routeCoords[i][1]}`;
+    const indices = coordIndices.get(key);
+    if (indices) indices.push(i);
+    else coordIndices.set(key, [i]);
+  }
   let searchFrom = 0;
 
   for (const step of route.steps) {
     const stepStart = step.maneuver.location;
-    let bestIdx = searchFrom;
-    let bestDist = Infinity;
-    const limit = Math.min(searchFrom + 500, routeCoords.length);
-    for (let i = searchFrom; i < limit; i++) {
-      const dx = routeCoords[i][0] - stepStart[0];
-      const dy = routeCoords[i][1] - stepStart[1];
-      const d = dx * dx + dy * dy;
-      if (d < bestDist) {
-        bestDist = d;
-        bestIdx = i;
-      }
+    const exactMatches = coordIndices.get(`${stepStart[0]},${stepStart[1]}`);
+    let bestIdx = exactMatches?.find((index) => index >= searchFrom);
+
+    // OSRM maneuver coordinates normally occur verbatim in the overview
+    // geometry. Retain a full-route nearest fallback for rounded geometries.
+    if (bestIdx === undefined) {
+      bestIdx = Math.max(
+        searchFrom,
+        findNearestRoutePoint(
+          stepStart[0],
+          stepStart[1],
+          routeCoords,
+          searchFrom,
+          routeCoords.length
+        ).segmentIndex
+      );
     }
     ranges.push({ start: bestIdx, end: bestIdx });
     searchFrom = bestIdx;
@@ -89,7 +117,35 @@ function buildStepCoordRanges(route: RouteData): { start: number; end: number }[
   return ranges;
 }
 
-let cachedStepRanges: { start: number; end: number }[] = [];
+function buildRouteCache(route: RouteData): RouteCache {
+  return {
+    cumulativeDistances: buildCumulativeDistances(route.geometry.coordinates),
+    stepRanges: buildStepCoordRanges(route),
+    nearestSegmentCursor: 0,
+  };
+}
+
+function findStepIndexForSegment(
+  ranges: { start: number; end: number }[],
+  segmentIndex: number,
+  fallback: number
+): number {
+  let low = 0;
+  let high = ranges.length - 1;
+
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    if (segmentIndex <= ranges[middle].end) {
+      high = middle - 1;
+    } else {
+      low = middle + 1;
+    }
+  }
+
+  return low < ranges.length ? low : fallback;
+}
+
+let cachedRoute: RouteCache | null = null;
 
 export const useNavigationStore = create<NavigationState>()((set, get) => ({
   status: "idle",
@@ -111,7 +167,9 @@ export const useNavigationStore = create<NavigationState>()((set, get) => ({
   searchQuery: "",
   isSearchOpen: false,
   isCalculating: false,
+  routeRequestGeneration: 0,
   osrmReady: false,
+  osrmError: null,
 
   setSearchOpen: (open) =>
     set({
@@ -125,7 +183,7 @@ export const useNavigationStore = create<NavigationState>()((set, get) => ({
   setDestination: (dest) => set({ destination: dest }),
 
   setRoute: (route) => {
-    cachedStepRanges = route ? buildStepCoordRanges(route) : [];
+    cachedRoute = route ? buildRouteCache(route) : null;
     const wasNavigating = get().status === "navigating";
     const newEta =
       wasNavigating && route
@@ -169,7 +227,7 @@ export const useNavigationStore = create<NavigationState>()((set, get) => ({
   },
 
   stopNavigation: () => {
-    cachedStepRanges = [];
+    cachedRoute = null;
     set({
       status: "idle",
       route: null,
@@ -186,6 +244,8 @@ export const useNavigationStore = create<NavigationState>()((set, get) => ({
       offRouteTimestamp: null,
       navigationStartTime: null,
       currentSpeedLimit: null,
+      isCalculating: false,
+      routeRequestGeneration: get().routeRequestGeneration + 1,
     });
   },
 
@@ -194,25 +254,32 @@ export const useNavigationStore = create<NavigationState>()((set, get) => ({
     if (status !== "navigating" || !route) return;
 
     const coords = route.geometry.coordinates;
-    const nearestSearchStart = cachedStepRanges[activeStepIndex]?.start ?? 0;
+    const routeCache = cachedRoute ?? buildRouteCache(route);
+    cachedRoute = routeCache;
+    const nearest = findNearestRoutePointFromCursor(
+      lon,
+      lat,
+      coords,
+      routeCache.nearestSegmentCursor
+    );
+    routeCache.nearestSegmentCursor = Math.max(routeCache.nearestSegmentCursor, nearest.segmentIndex);
 
-    const nearest = findNearestRoutePoint(lon, lat, coords, nearestSearchStart, 100);
-
-    let newStepIndex = activeStepIndex;
-    for (let i = activeStepIndex; i < cachedStepRanges.length; i++) {
-      if (
-        nearest.segmentIndex >= cachedStepRanges[i].start &&
-        nearest.segmentIndex <= cachedStepRanges[i].end
-      ) {
-        newStepIndex = i;
-        break;
-      }
-    }
+    const matchedStepIndex = findStepIndexForSegment(
+      routeCache.stepRanges,
+      nearest.segmentIndex,
+      activeStepIndex
+    );
+    const newStepIndex = Math.max(activeStepIndex, matchedStepIndex);
 
     let distToNext = 0;
-    if (newStepIndex < cachedStepRanges.length) {
-      const stepEnd = cachedStepRanges[newStepIndex].end;
-      distToNext = distanceAlongCoordsFromProjection(coords, nearest.segmentIndex, nearest.t, stepEnd);
+    if (newStepIndex < routeCache.stepRanges.length) {
+      const stepEnd = routeCache.stepRanges[newStepIndex].end;
+      distToNext = distanceAlongCumulativeFromProjection(
+        routeCache.cumulativeDistances,
+        nearest.segmentIndex,
+        nearest.t,
+        stepEnd
+      );
     }
 
     const segEnd = Math.min(nearest.segmentIndex + 1, coords.length - 1);
@@ -240,8 +307,8 @@ export const useNavigationStore = create<NavigationState>()((set, get) => ({
       offRouteTimestamp = null;
     }
 
-    const distFromHere = distanceAlongCoordsFromProjection(
-      coords,
+    const distFromHere = distanceAlongCumulativeFromProjection(
+      routeCache.cumulativeDistances,
       nearest.segmentIndex,
       nearest.t,
       coords.length - 1
@@ -286,5 +353,25 @@ export const useNavigationStore = create<NavigationState>()((set, get) => ({
   },
 
   setOsrmReady: (ready) => set({ osrmReady: ready }),
+  setOsrmStatus: (ready, error) => set({ osrmReady: ready, osrmError: error }),
   setIsCalculating: (calc) => set({ isCalculating: calc }),
+  beginRouteRequest: () => {
+    const generation = get().routeRequestGeneration + 1;
+    set({ routeRequestGeneration: generation });
+    return generation;
+  },
+  isRouteRequestCurrent: (generation) => get().routeRequestGeneration === generation,
+  applyRouteRequest: (generation, route) => {
+    if (get().routeRequestGeneration !== generation) return false;
+    get().setRoute(route);
+    return true;
+  },
+  finishRouteRequest: (generation) => {
+    if (get().routeRequestGeneration === generation) set({ isCalculating: false });
+  },
+  cancelRouteRequests: () =>
+    set((state) => ({
+      isCalculating: false,
+      routeRequestGeneration: state.routeRequestGeneration + 1,
+    })),
 }));

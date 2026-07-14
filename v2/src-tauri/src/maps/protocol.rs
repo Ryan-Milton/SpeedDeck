@@ -14,6 +14,10 @@ use std::path::{Path, PathBuf};
 use tauri::http::{Request, Response, StatusCode};
 use tauri::{AppHandle, Manager};
 
+/// PMTiles readers issue byte ranges. Never materialize an unbounded archive in
+/// memory when a PMTiles client omits a Range header or requests an excessive span.
+const MAX_RESPONSE_BYTES: u64 = 16 * 1024 * 1024;
+
 pub fn handle_tiles(app: &AppHandle, req: &Request<Vec<u8>>) -> Response<Vec<u8>> {
     let rel = req.uri().path().trim_start_matches('/');
     match resolve_resource_or_data(app, rel) {
@@ -47,7 +51,10 @@ pub fn cache_root(app: &AppHandle) -> Option<PathBuf> {
 /// was resolved against (mirrors `handle_tile_cache`; defeats `..`/symlink/
 /// percent-encoded escapes out of the resource or app-data dirs).
 fn resolve_resource_or_data(app: &AppHandle, rel: &str) -> Option<PathBuf> {
-    for root in [app.path().resource_dir(), app.path().app_data_dir()].into_iter().flatten() {
+    for root in [app.path().resource_dir(), app.path().app_data_dir()]
+        .into_iter()
+        .flatten()
+    {
         let p = root.join(rel);
         if let (Ok(canon_root), Ok(canon_p)) = (root.canonicalize(), p.canonicalize()) {
             if canon_p.starts_with(&canon_root) && canon_p.is_file() {
@@ -67,10 +74,14 @@ pub fn serve_file(path: &Path, req: &Request<Vec<u8>>) -> Response<Vec<u8>> {
     };
     let len = meta.len();
     let ctype = content_type(path);
+    let is_pmtiles = path.extension().and_then(|extension| extension.to_str()) == Some("pmtiles");
 
     // Range request → 206 Partial Content.
     if let Some(range) = req.headers().get("range").and_then(|v| v.to_str().ok()) {
         if let Some((start, end)) = parse_range(range, len) {
+            if is_pmtiles && end - start + 1 > MAX_RESPONSE_BYTES {
+                return range_not_satisfiable(len);
+            }
             let mut buf = vec![0u8; (end - start + 1) as usize];
             if file.seek(SeekFrom::Start(start)).is_err() || file.read_exact(&mut buf).is_err() {
                 return status(StatusCode::INTERNAL_SERVER_ERROR);
@@ -85,9 +96,14 @@ pub fn serve_file(path: &Path, req: &Request<Vec<u8>>) -> Response<Vec<u8>> {
                 .body(buf)
                 .unwrap_or_else(|_| status(StatusCode::INTERNAL_SERVER_ERROR));
         }
+        return range_not_satisfiable(len);
     }
 
-    // Full body.
+    // Full-body reads are only safe for small assets (for example individual
+    // vector tiles). PMTiles callers must use a bounded byte range.
+    if is_pmtiles && len > MAX_RESPONSE_BYTES {
+        return range_not_satisfiable(len);
+    }
     let mut buf = Vec::with_capacity(len as usize);
     if file.read_to_end(&mut buf).is_err() {
         return status(StatusCode::INTERNAL_SERVER_ERROR);
@@ -144,4 +160,53 @@ pub fn status(code: StatusCode) -> Response<Vec<u8>> {
         .header("Access-Control-Allow-Origin", "*")
         .body(Vec::new())
         .expect("static response")
+}
+
+fn range_not_satisfiable(len: u64) -> Response<Vec<u8>> {
+    Response::builder()
+        .status(StatusCode::RANGE_NOT_SATISFIABLE)
+        .header("Accept-Ranges", "bytes")
+        .header("Content-Range", format!("bytes */{len}"))
+        .header("Access-Control-Allow-Origin", "*")
+        .body(Vec::new())
+        .expect("static response")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_and_clamps_standard_ranges() {
+        assert_eq!(parse_range("bytes=2-99", 10), Some((2, 9)));
+        assert_eq!(parse_range("bytes=2-", 10), Some((2, 9)));
+        assert_eq!(parse_range("bytes=-3", 10), Some((7, 9)));
+        assert_eq!(parse_range("bytes=10-11", 10), None);
+    }
+
+    #[test]
+    fn rejects_unbounded_large_file_reads() {
+        let path = std::env::temp_dir().join(format!(
+            "speeddeck-large-pmtiles-test-{}.pmtiles",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        File::create(&path)
+            .unwrap()
+            .set_len(MAX_RESPONSE_BYTES + 1)
+            .unwrap();
+        let request = Request::builder()
+            .uri("tiles://localhost/map.pmtiles")
+            .body(Vec::new())
+            .unwrap();
+        let response = serve_file(&path, &request);
+        assert_eq!(response.status(), StatusCode::RANGE_NOT_SATISFIABLE);
+        assert_eq!(
+            response.headers().get("content-range").unwrap(),
+            &format!("bytes */{}", MAX_RESPONSE_BYTES + 1)
+        );
+        std::fs::remove_file(path).unwrap();
+    }
 }

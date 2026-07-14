@@ -5,13 +5,15 @@
 //! (keeps it reproducible; the wobble is purely cosmetic).
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::SyncSender;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-use super::nmea::NmeaParser;
-use super::{SampleSource, VehicleProvider, VehicleSample};
+use super::nmea::{NmeaParser, ParseResult};
+use super::{
+    send_sample, ReceiverStatus, SampleSource, VehicleEvent, VehicleProvider, VehicleSample,
+};
 
 const SEATTLE_LAT: f64 = 47.6062;
 const SEATTLE_LON: f64 = -122.3321;
@@ -49,8 +51,17 @@ impl VehicleProvider for SimulatorProvider {
         "simulator"
     }
 
-    fn spawn(self: Box<Self>, tx: Sender<VehicleSample>, stop: Arc<AtomicBool>) {
+    fn spawn(self: Box<Self>, tx: SyncSender<VehicleEvent>, stop: Arc<AtomicBool>) {
         thread::spawn(move || {
+            if tx
+                .send(VehicleEvent::Health {
+                    source: SampleSource::Simulator,
+                    status: ReceiverStatus::Fix,
+                })
+                .is_err()
+            {
+                return;
+            }
             let interval = 1.0 / self.update_hz;
             let mut st = SimState {
                 lat: SEATTLE_LAT,
@@ -70,9 +81,9 @@ impl VehicleProvider for SimulatorProvider {
                 let rmc = st.make_rmc();
                 // Feed both through the parser; RMC completes a fix.
                 parser.parse(&gga);
-                if let Some(fix) = parser.parse(&rmc) {
+                if let ParseResult::Fix(fix) = parser.parse(&rmc) {
                     let sample = VehicleSample::from_raw(fix, SampleSource::Simulator);
-                    if tx.send(sample).is_err() {
+                    if !send_sample(&tx, sample) {
                         break;
                     }
                 }

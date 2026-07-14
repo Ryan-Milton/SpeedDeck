@@ -6,13 +6,13 @@ use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 
 use super::library::{LibraryStore, TrackInfo};
-use super::player::{spawn_player, PlaybackState, PlayerCmd};
+use super::player::{spawn_player, PlaybackState, PlayerCmd, PlayerEvent};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -54,6 +54,9 @@ struct Inner {
     shuffle: bool,
     repeat: RepeatMode,
     volume: f32,
+    player_generation: u64,
+    track_loaded: bool,
+    now_playing: Option<TrackInfo>,
 }
 
 #[derive(Clone, Serialize)]
@@ -81,7 +84,7 @@ pub struct MediaController {
 
 impl MediaController {
     pub fn new(app: AppHandle, store: LibraryStore) -> Self {
-        let (tx, state) = spawn_player(1.0);
+        let (tx, state, events) = spawn_player(1.0);
         let controller = MediaController {
             store,
             tx,
@@ -93,23 +96,18 @@ impl MediaController {
                 shuffle: false,
                 repeat: RepeatMode::Off,
                 volume: 1.0,
+                player_generation: 0,
+                track_loaded: false,
+                now_playing: None,
             })),
             app,
         };
-        // Ticker: emit state ~3 Hz and auto-advance when a track ends.
-        let ticker = controller.clone();
-        thread::spawn(move || loop {
-            thread::sleep(Duration::from_millis(300));
-            let ended = {
-                let mut s = ticker.state.lock().unwrap();
-                let e = s.ended;
-                s.ended = false;
-                e
-            };
-            if ended {
-                ticker.step(true);
+        let listener = controller.clone();
+        thread::spawn(move || {
+            while let Ok(event) = events.recv() {
+                listener.handle_player_event(event);
             }
-            ticker.emit_state();
+            listener.player_disconnected();
         });
         controller
     }
@@ -128,7 +126,6 @@ impl MediaController {
             }
         }
         self.load_current();
-        self.emit_state();
     }
 
     pub fn play_album(&self, album: &str, artist: &str, start: usize) -> Result<(), String> {
@@ -151,21 +148,19 @@ impl MediaController {
     }
 
     pub fn pause(&self) {
-        let _ = self.tx.send(PlayerCmd::Pause);
+        self.send_control(PlayerCmd::Pause);
     }
     pub fn resume(&self) {
-        let _ = self.tx.send(PlayerCmd::Resume);
+        self.send_control(PlayerCmd::Resume);
     }
     pub fn next(&self) {
         self.step(true);
-        self.emit_state();
     }
     pub fn prev(&self) {
         self.step(false);
-        self.emit_state();
     }
     pub fn seek(&self, ms: u64) {
-        let _ = self.tx.send(PlayerCmd::Seek(ms));
+        self.send_control(PlayerCmd::Seek(ms));
     }
 
     pub fn set_volume(&self, v: f32) {
@@ -218,52 +213,170 @@ impl MediaController {
         if next {
             self.load_current();
         } else {
-            let _ = self.tx.send(PlayerCmd::Stop);
+            self.stop_player();
         }
     }
 
     fn load_current(&self) {
-        if let Some(path) = self.current_path() {
-            let _ = self.tx.send(PlayerCmd::Load(path));
+        let (path, generation) = {
+            let mut inner = self.inner.lock().unwrap();
+            let path = inner
+                .order
+                .get(inner.pos)
+                .and_then(|track_idx| inner.queue.get(*track_idx))
+                .map(PathBuf::from);
+            let generation = next_generation(&mut inner);
+            (path, generation)
+        };
+
+        if let Some(path) = path {
+            if self.tx.send(PlayerCmd::Load { path, generation }).is_err() {
+                self.player_command_failed(generation);
+            }
+        } else {
+            self.send_stop(generation);
         }
     }
 
-    fn current_path(&self) -> Option<PathBuf> {
-        let inner = self.inner.lock().unwrap();
-        let track_idx = *inner.order.get(inner.pos)?;
-        inner.queue.get(track_idx).map(PathBuf::from)
+    fn stop_player(&self) {
+        let generation = {
+            let mut inner = self.inner.lock().unwrap();
+            next_generation(&mut inner)
+        };
+        self.send_stop(generation);
     }
 
-    fn current_track(&self) -> Option<TrackInfo> {
-        let path = {
-            let inner = self.inner.lock().unwrap();
-            let track_idx = *inner.order.get(inner.pos)?;
-            inner.queue.get(track_idx)?.clone()
-        };
-        self.store.track_by_path(&path).ok().flatten()
+    fn send_stop(&self, generation: u64) {
+        if self.tx.send(PlayerCmd::Stop { generation }).is_err() {
+            self.player_command_failed(generation);
+        }
     }
 
     fn build_state(&self) -> MediaState {
         let pb = self.state.lock().unwrap().clone();
         let inner = self.inner.lock().unwrap();
+        let (is_playing, position_ms, duration_ms) = if inner.track_loaded {
+            (pb.is_playing, pb.position_ms, pb.duration_ms)
+        } else {
+            (false, 0, 0)
+        };
         MediaState {
-            is_playing: pb.is_playing,
-            position_ms: pb.position_ms,
-            duration_ms: pb.duration_ms,
+            is_playing,
+            position_ms,
+            duration_ms,
             volume: inner.volume,
             shuffle: inner.shuffle,
             repeat: inner.repeat,
             queue_len: inner.queue.len(),
             index: inner.pos,
-            now_playing: None, // filled below (avoid holding the lock across store call)
+            now_playing: inner.now_playing.clone(),
         }
     }
 
     fn emit_state(&self) {
-        let mut state = self.build_state();
-        state.now_playing = self.current_track();
-        let _ = self.app.emit("media:state", state);
+        let _ = self.app.emit("media:state", self.build_state());
     }
+
+    fn handle_player_event(&self, event: PlayerEvent) {
+        match event {
+            PlayerEvent::LoadApplied {
+                path,
+                generation,
+                result,
+            } => {
+                let now_playing = if result.is_ok() {
+                    self.store
+                        .track_by_path(&path.to_string_lossy())
+                        .ok()
+                        .flatten()
+                } else {
+                    None
+                };
+                let mut inner = self.inner.lock().unwrap();
+                if !apply_load_result(&mut inner, generation, result.is_ok(), now_playing) {
+                    return;
+                }
+                drop(inner);
+                self.emit_state();
+            }
+            PlayerEvent::StopApplied { generation } => {
+                let mut inner = self.inner.lock().unwrap();
+                if !apply_stop_result(&mut inner, generation) {
+                    return;
+                }
+                drop(inner);
+                self.emit_state();
+            }
+            PlayerEvent::ControlApplied => self.emit_state(),
+            PlayerEvent::Progress { generation, ended } => {
+                if self.inner.lock().unwrap().player_generation != generation {
+                    return;
+                }
+                if ended {
+                    self.step(true);
+                } else {
+                    self.emit_state();
+                }
+            }
+        }
+    }
+
+    fn send_control(&self, command: PlayerCmd) {
+        if self.tx.send(command).is_err() {
+            self.player_disconnected();
+        }
+    }
+
+    fn player_command_failed(&self, generation: u64) {
+        *self.state.lock().unwrap() = PlaybackState::default();
+        let mut inner = self.inner.lock().unwrap();
+        if inner.player_generation != generation {
+            return;
+        }
+        inner.track_loaded = false;
+        inner.now_playing = None;
+        drop(inner);
+        self.emit_state();
+    }
+
+    fn player_disconnected(&self) {
+        *self.state.lock().unwrap() = PlaybackState::default();
+        let mut inner = self.inner.lock().unwrap();
+        inner.track_loaded = false;
+        inner.now_playing = None;
+        drop(inner);
+        self.emit_state();
+    }
+}
+
+fn next_generation(inner: &mut Inner) -> u64 {
+    inner.player_generation = inner.player_generation.wrapping_add(1);
+    inner.track_loaded = false;
+    inner.now_playing = None;
+    inner.player_generation
+}
+
+fn apply_load_result(
+    inner: &mut Inner,
+    generation: u64,
+    loaded: bool,
+    now_playing: Option<TrackInfo>,
+) -> bool {
+    if inner.player_generation != generation {
+        return false;
+    }
+    inner.track_loaded = loaded;
+    inner.now_playing = if loaded { now_playing } else { None };
+    true
+}
+
+fn apply_stop_result(inner: &mut Inner, generation: u64) -> bool {
+    if inner.player_generation != generation {
+        return false;
+    }
+    inner.track_loaded = false;
+    inner.now_playing = None;
+    true
 }
 
 /// In-place Fisher–Yates that moves the current track to position 0, then
@@ -274,7 +387,12 @@ fn shuffle_keeping_current(inner: &mut Inner) {
         return;
     }
     let current = inner.order[inner.pos.min(n - 1)];
-    let mut rest: Vec<usize> = inner.order.iter().copied().filter(|&x| x != current).collect();
+    let mut rest: Vec<usize> = inner
+        .order
+        .iter()
+        .copied()
+        .filter(|&x| x != current)
+        .collect();
 
     let mut seed = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -299,6 +417,20 @@ fn shuffle_keeping_current(inner: &mut Inner) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn inner() -> Inner {
+        Inner {
+            queue: Vec::new(),
+            order: Vec::new(),
+            pos: 0,
+            shuffle: false,
+            repeat: RepeatMode::Off,
+            volume: 1.0,
+            player_generation: 1,
+            track_loaded: false,
+            now_playing: None,
+        }
+    }
 
     #[test]
     fn advance_forward_stops_at_end_when_off() {
@@ -327,5 +459,53 @@ mod tests {
     #[test]
     fn advance_empty_is_none() {
         assert_eq!(advance(0, 0, RepeatMode::All, true), None);
+    }
+
+    #[test]
+    fn load_metadata_changes_only_for_current_successful_load() {
+        let mut inner = inner();
+        let track = TrackInfo {
+            path: "/m/current.mp3".into(),
+            title: Some("Current".into()),
+            ..Default::default()
+        };
+
+        assert!(!apply_load_result(&mut inner, 0, true, Some(track.clone())));
+        assert!(!inner.track_loaded);
+        assert!(inner.now_playing.is_none());
+
+        assert!(apply_load_result(&mut inner, 1, false, Some(track.clone())));
+        assert!(!inner.track_loaded);
+        assert!(inner.now_playing.is_none());
+
+        assert!(apply_load_result(&mut inner, 1, true, Some(track)));
+        assert!(inner.track_loaded);
+        assert_eq!(
+            inner.now_playing.as_ref().and_then(|t| t.title.as_deref()),
+            Some("Current")
+        );
+    }
+
+    #[test]
+    fn newer_generation_rejects_late_load_and_stop_results() {
+        let mut inner = inner();
+        assert!(apply_load_result(
+            &mut inner,
+            1,
+            true,
+            Some(TrackInfo::default())
+        ));
+        let current = next_generation(&mut inner);
+
+        assert_eq!(current, 2);
+        assert!(!apply_load_result(
+            &mut inner,
+            1,
+            true,
+            Some(TrackInfo::default())
+        ));
+        assert!(!apply_stop_result(&mut inner, 1));
+        assert!(!inner.track_loaded);
+        assert!(inner.now_playing.is_none());
     }
 }

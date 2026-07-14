@@ -62,7 +62,11 @@ pub async fn calculate_route(
 ) -> Result<RouteData, String> {
     let bearing_param = match (heading, speed) {
         (Some(h), Some(s)) if s >= 2.0 => {
-            format!("&bearings={},{};", (h.round() as i64).rem_euclid(360), bearing_range(Some(s)))
+            format!(
+                "&bearings={},{};",
+                (h.round() as i64).rem_euclid(360),
+                bearing_range(Some(s))
+            )
         }
         _ => String::new(),
     };
@@ -127,7 +131,10 @@ pub async fn calculate_route(
 /// Parse an OSRM `/route` JSON response into RouteData (pure; unit-tested).
 pub fn parse_osrm(data: &Value) -> Result<RouteData, String> {
     if data.get("code").and_then(|c| c.as_str()) != Some("Ok") {
-        let code = data.get("code").and_then(|c| c.as_str()).unwrap_or("unknown");
+        let code = data
+            .get("code")
+            .and_then(|c| c.as_str())
+            .unwrap_or("unknown");
         return Err(format!("OSRM returned no route: {code}"));
     }
     let route = data
@@ -147,16 +154,34 @@ pub fn parse_osrm(data: &Value) -> Result<RouteData, String> {
                     let loc = m.get("location").and_then(|v| v.as_array());
                     steps.push(RouteStep {
                         maneuver: RouteManeuver {
-                            kind: m.get("type").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                            kind: m
+                                .get("type")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string(),
                             modifier: m.get("modifier").and_then(|v| v.as_str()).map(String::from),
                             location: [
-                                loc.and_then(|a| a.first()).and_then(|v| v.as_f64()).unwrap_or(0.0),
-                                loc.and_then(|a| a.get(1)).and_then(|v| v.as_f64()).unwrap_or(0.0),
+                                loc.and_then(|a| a.first())
+                                    .and_then(|v| v.as_f64())
+                                    .unwrap_or(0.0),
+                                loc.and_then(|a| a.get(1))
+                                    .and_then(|v| v.as_f64())
+                                    .unwrap_or(0.0),
                             ],
-                            bearing_before: m.get("bearing_before").and_then(|v| v.as_f64()).unwrap_or(0.0),
-                            bearing_after: m.get("bearing_after").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                            bearing_before: m
+                                .get("bearing_before")
+                                .and_then(|v| v.as_f64())
+                                .unwrap_or(0.0),
+                            bearing_after: m
+                                .get("bearing_after")
+                                .and_then(|v| v.as_f64())
+                                .unwrap_or(0.0),
                         },
-                        name: step.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                        name: step
+                            .get("name")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
                         distance: step.get("distance").and_then(|v| v.as_f64()).unwrap_or(0.0),
                         duration: step.get("duration").and_then(|v| v.as_f64()).unwrap_or(0.0),
                         geometry: step
@@ -192,8 +217,14 @@ pub fn parse_osrm(data: &Value) -> Result<RouteData, String> {
             .get("geometry")
             .cloned()
             .unwrap_or_else(|| json!({"type":"LineString","coordinates":[]})),
-        distance: route.get("distance").and_then(|v| v.as_f64()).unwrap_or(0.0),
-        duration: route.get("duration").and_then(|v| v.as_f64()).unwrap_or(0.0),
+        distance: route
+            .get("distance")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0),
+        duration: route
+            .get("duration")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0),
         steps,
         maxspeeds,
     })

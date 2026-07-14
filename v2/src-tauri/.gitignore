@@ -6,5 +6,8 @@
 
 # Bundled binaries & large map assets are produced by build steps
 /binaries
-/resources/*.pmtiles
+/resources/map/*.pmtiles
 /resources/osrm
+
+# This application lockfile is a reproducible-release input and is committed.
+!/Cargo.lock

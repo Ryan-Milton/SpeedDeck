@@ -18,7 +18,7 @@
   z-index: 1;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
 }
-/* LiveMap fills the pane via its own position:absolute inset:0. */
+/* The shared map host fills the pane; LiveMap moves its owned container here. */
 
 .dash-aside {
   display: grid;

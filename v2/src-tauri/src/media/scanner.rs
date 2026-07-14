@@ -44,6 +44,10 @@ fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
 
 /// Full rescan of all configured folders. Emits `media:library` progress.
 pub fn scan(app: &AppHandle, store: &LibraryStore, art_dir: &Path) -> Result<usize, String> {
+    // Startup and manual scans share this gate through cloned LibraryStores.
+    // The later scan therefore reads folders and commits only after the older
+    // snapshot has finished, so an older snapshot cannot win the final write.
+    let _scan_guard = store.begin_scan();
     let _ = std::fs::create_dir_all(art_dir);
     let folders = store.folders()?;
 
@@ -52,7 +56,14 @@ pub fn scan(app: &AppHandle, store: &LibraryStore, art_dir: &Path) -> Result<usi
         walk(Path::new(f), &mut files);
     }
     let total = files.len();
-    let _ = app.emit("media:library", LibraryProgress { step: "scan".into(), scanned: 0, total });
+    let _ = app.emit(
+        "media:library",
+        LibraryProgress {
+            step: "scan".into(),
+            scanned: 0,
+            total,
+        },
+    );
 
     let mut metas = Vec::with_capacity(total);
     for (i, path) in files.iter().enumerate() {
@@ -60,12 +71,26 @@ pub fn scan(app: &AppHandle, store: &LibraryStore, art_dir: &Path) -> Result<usi
             metas.push(meta);
         }
         if i % 50 == 0 {
-            let _ = app.emit("media:library", LibraryProgress { step: "scan".into(), scanned: i, total });
+            let _ = app.emit(
+                "media:library",
+                LibraryProgress {
+                    step: "scan".into(),
+                    scanned: i,
+                    total,
+                },
+            );
         }
     }
 
     store.replace_tracks(&metas)?;
-    let _ = app.emit("media:library", LibraryProgress { step: "done".into(), scanned: total, total });
+    let _ = app.emit(
+        "media:library",
+        LibraryProgress {
+            step: "done".into(),
+            scanned: total,
+            total,
+        },
+    );
     Ok(metas.len())
 }
 
@@ -91,7 +116,13 @@ fn read_meta(path: &Path, art_dir: &Path) -> Option<TrackMeta> {
             let data = pic.data();
             let ext = pic
                 .mime_type()
-                .map(|mt| if mt.as_str().contains("png") { "png" } else { "jpg" })
+                .map(|mt| {
+                    if mt.as_str().contains("png") {
+                        "png"
+                    } else {
+                        "jpg"
+                    }
+                })
                 .unwrap_or("jpg");
             let key = format!("{}.{ext}", hash_bytes(data));
             let file = art_dir.join(&key);

@@ -1,0 +1,3 @@
+# Release lockfiles are intentionally committed; do not ignore them.
+!package-lock.json
+!src-tauri/Cargo.lock

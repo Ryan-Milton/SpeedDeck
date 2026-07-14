@@ -26,7 +26,7 @@ import "./trips.css";
 
 // Record/pause/resume/stop control.
 function RecordControl() {
-  const status = useVehicleStore((s) => s.state?.tripStatus ?? "idle");
+  const status = useVehicleStore((s) => s.tripStatus);
   const act = (p: Promise<unknown>) => p.catch(() => toastError("Trip recorder didn't respond."));
   return (
     <div className="trip-record">

@@ -3,12 +3,22 @@
   "private": true,
   "version": "2.0.0",
   "type": "module",
-  "description": "CarPlay-style in-car infotainment for the Steam Deck (Tauri 2 + React)",
+  "description": "Automotive navigation and media HUD for the Steam Deck (Tauri 2 + React)",
+  "engines": {
+    "node": "22.14.x",
+    "npm": "10.9.x"
+  },
+  "packageManager": "npm@10.9.2",
   "scripts": {
     "dev": "vite",
+    "dev:sim": "SPEEDDECK_SIMULATOR=1 tauri dev",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "release:preflight": "bash ./scripts/check-release-assets.sh",
+    "release:maps": "bash ./scripts/download-tiles.sh",
+    "release:sidecar": "bash ./scripts/fetch-osrm-sidecar.sh",
+    "bundle:appimage": "bash ./scripts/bundle-appimage-docker.sh",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build"

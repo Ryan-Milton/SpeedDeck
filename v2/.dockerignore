@@ -1,0 +1,15 @@
+# Keep the Docker release context limited to source and required bundle inputs.
+# Do not exclude src-tauri/resources/map/*.pmtiles or src-tauri/binaries/: both
+# are externally produced release inputs validated by check-release-assets.sh.
+.git/
+.claude/
+node_modules/
+dist/
+*.log
+.env
+.env.*
+!example.env
+
+# Generated build output is platform-specific and must never seed a release.
+src-tauri/target/
+src-tauri/gen/

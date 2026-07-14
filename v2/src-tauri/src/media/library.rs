@@ -1,7 +1,7 @@
 //! Music library cache (SQLite) — modeled on `trips/database.rs`.
 
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use rusqlite::{params, Connection};
 use serde::Serialize;
@@ -9,6 +9,11 @@ use serde::Serialize;
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS folders (
     path TEXT PRIMARY KEY
+);
+
+CREATE TABLE IF NOT EXISTS library_meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS tracks (
@@ -79,6 +84,7 @@ pub struct AlbumInfo {
 #[derive(Clone)]
 pub struct LibraryStore {
     conn: Arc<Mutex<Connection>>,
+    scan_gate: Arc<Mutex<()>>,
 }
 
 impl LibraryStore {
@@ -87,24 +93,34 @@ impl LibraryStore {
             std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
         let conn = Connection::open(path).map_err(|e| e.to_string())?;
-        conn.execute_batch("PRAGMA journal_mode=WAL;").map_err(|e| e.to_string())?;
+        conn.execute_batch("PRAGMA journal_mode=WAL;")
+            .map_err(|e| e.to_string())?;
         conn.execute_batch(SCHEMA).map_err(|e| e.to_string())?;
-        Ok(LibraryStore { conn: Arc::new(Mutex::new(conn)) })
+        Ok(LibraryStore {
+            conn: Arc::new(Mutex::new(conn)),
+            scan_gate: Arc::new(Mutex::new(())),
+        })
     }
 
     #[cfg(test)]
     pub fn open_in_memory() -> Result<Self, String> {
         let conn = Connection::open_in_memory().map_err(|e| e.to_string())?;
         conn.execute_batch(SCHEMA).map_err(|e| e.to_string())?;
-        Ok(LibraryStore { conn: Arc::new(Mutex::new(conn)) })
+        Ok(LibraryStore {
+            conn: Arc::new(Mutex::new(conn)),
+            scan_gate: Arc::new(Mutex::new(())),
+        })
     }
 
     // --- folders ---
 
     pub fn add_folder(&self, path: &str) -> Result<(), String> {
         let conn = self.conn.lock().unwrap();
-        conn.execute("INSERT OR IGNORE INTO folders(path) VALUES (?1)", params![path])
-            .map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT OR IGNORE INTO folders(path) VALUES (?1)",
+            params![path],
+        )
+        .map_err(|e| e.to_string())?;
         Ok(())
     }
 
@@ -126,13 +142,40 @@ impl LibraryStore {
         rows.collect::<Result<_, _>>().map_err(|e| e.to_string())
     }
 
+    /// A successful scan persists a complete library snapshot, so reopening the
+    /// app can use it without walking every configured folder again.
+    pub fn needs_initial_scan(&self) -> bool {
+        let conn = self.conn.lock().unwrap();
+        let scanned = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM library_meta WHERE key='scan_complete')",
+                [],
+                |r| r.get::<_, bool>(0),
+            )
+            .unwrap_or(false);
+        if scanned {
+            return false;
+        }
+
+        // Existing installations predate the scan marker. Their non-empty
+        // cache is already a usable snapshot and must not trigger a rescan.
+        conn.query_row("SELECT COUNT(*) FROM tracks", [], |r| r.get::<_, i64>(0))
+            .unwrap_or(0)
+            == 0
+    }
+
+    pub(crate) fn begin_scan(&self) -> MutexGuard<'_, ()> {
+        self.scan_gate.lock().unwrap()
+    }
+
     // --- tracks ---
 
     /// Replace all tracks with a fresh set (called after a full rescan).
     pub fn replace_tracks(&self, tracks: &[TrackMeta]) -> Result<(), String> {
         let mut conn = self.conn.lock().unwrap();
         let tx = conn.transaction().map_err(|e| e.to_string())?;
-        tx.execute("DELETE FROM tracks", []).map_err(|e| e.to_string())?;
+        tx.execute("DELETE FROM tracks", [])
+            .map_err(|e| e.to_string())?;
         {
             let mut stmt = tx
                 .prepare(
@@ -143,22 +186,41 @@ impl LibraryStore {
                 .map_err(|e| e.to_string())?;
             for t in tracks {
                 stmt.execute(params![
-                    t.path, t.title, t.artist, t.album, t.album_artist,
-                    t.track_no, t.disc_no, t.duration_ms, t.genre, t.year, t.art_key,
+                    t.path,
+                    t.title,
+                    t.artist,
+                    t.album,
+                    t.album_artist,
+                    t.track_no,
+                    t.disc_no,
+                    t.duration_ms,
+                    t.genre,
+                    t.year,
+                    t.art_key,
                 ])
                 .map_err(|e| e.to_string())?;
             }
         }
         tx.execute("INSERT INTO tracks_fts(tracks_fts) VALUES('rebuild')", [])
             .map_err(|e| e.to_string())?;
+        tx.execute(
+            "INSERT INTO library_meta(key, value) VALUES('scan_complete', '1') \
+             ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            [],
+        )
+        .map_err(|e| e.to_string())?;
         tx.commit().map_err(|e| e.to_string())?;
         Ok(())
     }
 
     pub fn track(&self, id: i64) -> Result<Option<TrackInfo>, String> {
         let conn = self.conn.lock().unwrap();
-        let mut stmt = conn.prepare(&format!("{SELECT_TRACK} WHERE id=?1")).map_err(|e| e.to_string())?;
-        let mut rows = stmt.query_map(params![id], map_track).map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare(&format!("{SELECT_TRACK} WHERE id=?1"))
+            .map_err(|e| e.to_string())?;
+        let mut rows = stmt
+            .query_map(params![id], map_track)
+            .map_err(|e| e.to_string())?;
         match rows.next() {
             Some(r) => Ok(Some(r.map_err(|e| e.to_string())?)),
             None => Ok(None),
@@ -170,8 +232,12 @@ impl LibraryStore {
     /// keys on path so a rescan never orphans the currently-playing track.
     pub fn track_by_path(&self, path: &str) -> Result<Option<TrackInfo>, String> {
         let conn = self.conn.lock().unwrap();
-        let mut stmt = conn.prepare(&format!("{SELECT_TRACK} WHERE path=?1")).map_err(|e| e.to_string())?;
-        let mut rows = stmt.query_map(params![path], map_track).map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare(&format!("{SELECT_TRACK} WHERE path=?1"))
+            .map_err(|e| e.to_string())?;
+        let mut rows = stmt
+            .query_map(params![path], map_track)
+            .map_err(|e| e.to_string())?;
         match rows.next() {
             Some(r) => Ok(Some(r.map_err(|e| e.to_string())?)),
             None => Ok(None),
@@ -179,7 +245,10 @@ impl LibraryStore {
     }
 
     pub fn all_tracks(&self) -> Result<Vec<TrackInfo>, String> {
-        self.query_tracks(&format!("{SELECT_TRACK} ORDER BY artist, album, disc_no, track_no"), [])
+        self.query_tracks(
+            &format!("{SELECT_TRACK} ORDER BY artist, album, disc_no, track_no"),
+            [],
+        )
     }
 
     pub fn tracks_by_album(&self, album: &str, artist: &str) -> Result<Vec<TrackInfo>, String> {
@@ -247,7 +316,8 @@ impl LibraryStore {
 
     pub fn track_count(&self) -> i64 {
         let conn = self.conn.lock().unwrap();
-        conn.query_row("SELECT COUNT(*) FROM tracks", [], |r| r.get(0)).unwrap_or(0)
+        conn.query_row("SELECT COUNT(*) FROM tracks", [], |r| r.get(0))
+            .unwrap_or(0)
     }
 
     fn query_tracks(
@@ -257,7 +327,9 @@ impl LibraryStore {
     ) -> Result<Vec<TrackInfo>, String> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
-        let rows = stmt.query_map(params, map_track).map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params, map_track)
+            .map_err(|e| e.to_string())?;
         rows.collect::<Result<_, _>>().map_err(|e| e.to_string())
     }
 }
@@ -318,6 +390,39 @@ mod tests {
     }
 
     #[test]
+    fn cloned_stores_serialize_scans() {
+        let s = LibraryStore::open_in_memory().unwrap();
+        let clone = s.clone();
+        let _scan = s.begin_scan();
+
+        assert!(clone.scan_gate.try_lock().is_err());
+    }
+
+    #[test]
+    fn persisted_snapshot_skips_startup_scan() {
+        let s = LibraryStore::open_in_memory().unwrap();
+        assert!(s.needs_initial_scan());
+
+        // A scan is complete even when the selected folders contain no audio.
+        s.replace_tracks(&[]).unwrap();
+        assert!(!s.needs_initial_scan());
+    }
+
+    #[test]
+    fn existing_populated_library_skips_startup_scan_without_marker() {
+        let s = LibraryStore::open_in_memory().unwrap();
+        s.replace_tracks(&[meta("/m/a.mp3", "A", "X", "t", 1)])
+            .unwrap();
+        s.conn
+            .lock()
+            .unwrap()
+            .execute("DELETE FROM library_meta", [])
+            .unwrap();
+
+        assert!(!s.needs_initial_scan());
+    }
+
+    #[test]
     fn replace_albums_artists_and_tracks() {
         let s = LibraryStore::open_in_memory().unwrap();
         s.replace_tracks(&[
@@ -340,7 +445,10 @@ mod tests {
         s.replace_tracks(&[
             meta("/m/a1.mp3", "Daft Punk", "Discovery", "One More Time", 1),
             // No album/artist tags at all — must still be browsable.
-            TrackMeta { path: "/m/untagged.mp3".into(), ..Default::default() },
+            TrackMeta {
+                path: "/m/untagged.mp3".into(),
+                ..Default::default()
+            },
             // Empty-string tags must behave like missing ones.
             TrackMeta {
                 path: "/m/empty-tags.mp3".into(),
@@ -362,18 +470,29 @@ mod tests {
         assert!(artists.contains(&"Unknown Artist".to_string()));
 
         // Tapping the bucket must return its tracks (grouping + detail agree).
-        let tracks = s.tracks_by_album("Unknown Album", "Unknown Artist").unwrap();
+        let tracks = s
+            .tracks_by_album("Unknown Album", "Unknown Artist")
+            .unwrap();
         assert_eq!(tracks.len(), 2);
 
         // Tagged albums are unaffected.
-        assert_eq!(s.tracks_by_album("Discovery", "Daft Punk").unwrap().len(), 1);
+        assert_eq!(
+            s.tracks_by_album("Discovery", "Daft Punk").unwrap().len(),
+            1
+        );
     }
 
     #[test]
     fn fts_search_matches_prefix() {
         let s = LibraryStore::open_in_memory().unwrap();
-        s.replace_tracks(&[meta("/m/a1.mp3", "Daft Punk", "Discovery", "One More Time", 1)])
-            .unwrap();
+        s.replace_tracks(&[meta(
+            "/m/a1.mp3",
+            "Daft Punk",
+            "Discovery",
+            "One More Time",
+            1,
+        )])
+        .unwrap();
         assert_eq!(s.search("disco", 10).unwrap().len(), 1);
         assert_eq!(s.search("daft", 10).unwrap().len(), 1);
         assert_eq!(s.search("zzzz", 10).unwrap().len(), 0);
@@ -382,8 +501,10 @@ mod tests {
     #[test]
     fn replace_clears_previous() {
         let s = LibraryStore::open_in_memory().unwrap();
-        s.replace_tracks(&[meta("/m/a1.mp3", "A", "X", "t", 1)]).unwrap();
-        s.replace_tracks(&[meta("/m/b1.mp3", "B", "Y", "u", 1)]).unwrap();
+        s.replace_tracks(&[meta("/m/a1.mp3", "A", "X", "t", 1)])
+            .unwrap();
+        s.replace_tracks(&[meta("/m/b1.mp3", "B", "Y", "u", 1)])
+            .unwrap();
         assert_eq!(s.track_count(), 1);
         assert_eq!(s.all_tracks().unwrap()[0].artist.as_deref(), Some("B"));
     }
@@ -392,7 +513,8 @@ mod tests {
     fn track_by_path_survives_id_reassignment_on_rescan() {
         let s = LibraryStore::open_in_memory().unwrap();
         // Prepend a row so the second scan hands "/m/keep.mp3" a different id.
-        s.replace_tracks(&[meta("/m/keep.mp3", "A", "X", "Keep", 1)]).unwrap();
+        s.replace_tracks(&[meta("/m/keep.mp3", "A", "X", "Keep", 1)])
+            .unwrap();
         let id_before = s.track_by_path("/m/keep.mp3").unwrap().unwrap().id;
 
         // Rescan inserts another track first → AUTOINCREMENT gives "/m/keep.mp3" a fresh id.
@@ -402,7 +524,10 @@ mod tests {
         ])
         .unwrap();
 
-        let after = s.track_by_path("/m/keep.mp3").unwrap().expect("path still resolves");
+        let after = s
+            .track_by_path("/m/keep.mp3")
+            .unwrap()
+            .expect("path still resolves");
         assert_eq!(after.title.as_deref(), Some("Keep"));
         // The id changed (proving the queue must not key on it), but path is stable.
         assert_ne!(after.id, id_before);

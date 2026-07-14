@@ -50,7 +50,10 @@ pub fn music_folders(store: State<'_, LibraryStore>) -> Result<Vec<String>, Stri
 }
 
 #[tauri::command]
-pub fn music_add_folder(app: AppHandle, store: State<'_, LibraryStore>) -> Result<Vec<String>, String> {
+pub fn music_add_folder(
+    app: AppHandle,
+    store: State<'_, LibraryStore>,
+) -> Result<Vec<String>, String> {
     use tauri_plugin_dialog::DialogExt;
     if let Some(folder) = app.dialog().file().blocking_pick_folder() {
         let path = folder.into_path().map_err(|e| e.to_string())?;
@@ -60,7 +63,10 @@ pub fn music_add_folder(app: AppHandle, store: State<'_, LibraryStore>) -> Resul
 }
 
 #[tauri::command]
-pub fn music_remove_folder(store: State<'_, LibraryStore>, path: String) -> Result<Vec<String>, String> {
+pub fn music_remove_folder(
+    store: State<'_, LibraryStore>,
+    path: String,
+) -> Result<Vec<String>, String> {
     store.remove_folder(&path)?;
     store.folders()
 }
@@ -90,7 +96,10 @@ pub fn music_tracks_by_album(
 }
 
 #[tauri::command]
-pub fn music_search(store: State<'_, LibraryStore>, query: String) -> Result<Vec<TrackInfo>, String> {
+pub fn music_search(
+    store: State<'_, LibraryStore>,
+    query: String,
+) -> Result<Vec<TrackInfo>, String> {
     store.search(&query, 100)
 }
 

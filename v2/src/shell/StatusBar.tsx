@@ -17,11 +17,19 @@ function useClock(): string {
 export default function StatusBar() {
   const time = useClock();
   const state = useVehicleStore((s) => s.state);
-  const connected = useVehicleStore((s) => s.connected);
+  const health = useVehicleStore((s) => s.health);
   const street = useNavigationStore((s) => s.currentStreetName);
 
-  const hasFix = !!state && state.fix.fixQuality > 0;
+  const hasFix = health?.status === "fix";
+  const connected = health?.status === "connected" || health?.status === "nofix";
   const sats = state?.fix.satellites ?? 0;
+  const label = hasFix
+    ? `${sats} sat · fix`
+    : health?.status === "stale"
+      ? "gps stale"
+      : connected
+        ? "no fix"
+        : "no gps";
 
   return (
     <div className="statusbar">
@@ -33,7 +41,7 @@ export default function StatusBar() {
       <span className="status-right">
         <span className="gps-chip">
           <span className={`gps-dot ${hasFix ? "ok" : connected ? "weak" : "off"}`} />
-          <span className="gps-label">{connected ? `${sats} sat · fix` : "no gps"}</span>
+          <span className="gps-label">{label}</span>
         </span>
         <span className="status-clock">{time}</span>
       </span>

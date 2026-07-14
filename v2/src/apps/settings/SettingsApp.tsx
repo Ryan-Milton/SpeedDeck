@@ -15,6 +15,7 @@ const UNIT_TABS: { id: SpeedUnit; label: string }[] = [
 // Settings/about surface — grouped HUD panels.
 export default function SettingsApp() {
   const state = useVehicleStore((s) => s.state);
+  const health = useVehicleStore((s) => s.health);
   const speedUnit = useSettingsStore((s) => s.speedUnit);
   const setSpeedUnit = useSettingsStore((s) => s.setSpeedUnit);
   return (
@@ -34,7 +35,8 @@ export default function SettingsApp() {
       <SectionHeader title="System" />
       <HudPanel brackets={false} className="settings-panel">
         <div className="settings-list">
-          <SettingsRow label="GPS source" value={state?.source ?? "waiting…"} />
+          <SettingsRow label="GPS source" value={health?.source ?? state?.source ?? "waiting…"} />
+          <SettingsRow label="GPS status" value={health?.status ?? "waiting"} />
           <SettingsRow label="Fix quality" value={state ? state.fix.fixQuality : "—"} />
           <SettingsRow label="Version" value="SpeedDeck v2.0.0" />
         </div>

@@ -71,6 +71,69 @@ export function findNearestRoutePoint(
   return { segmentIndex: bestIdx, distance: bestDist, projection: bestProj, t: bestT };
 }
 
+/**
+ * Find the nearest segment at or ahead of a previous match. A bounded local
+ * search handles normal GPS updates; an uncertain result falls back to the
+ * complete unvisited route so doglegs and large jumps cannot trap the cursor.
+ */
+export function findNearestRoutePointFromCursor(
+  lon: number,
+  lat: number,
+  coords: number[][],
+  cursorIndex: number
+): { segmentIndex: number; distance: number; projection: [number, number]; t: number } {
+  const lastSegment = coords.length - 2;
+  const from = Math.max(0, Math.min(cursorIndex - 5, lastSegment));
+  const localTo = Math.min(lastSegment, Math.max(from, cursorIndex) + 64);
+
+  let bestDist = Infinity;
+  let bestIdx = from;
+  let bestProj: [number, number] = coords[from] as [number, number];
+  let bestT = 0;
+
+  const scan = (scanFrom: number, scanTo: number) => {
+    for (let i = scanFrom; i <= scanTo; i++) {
+      const result = pointToSegmentDistance(
+        lon,
+        lat,
+        coords[i][0],
+        coords[i][1],
+        coords[i + 1][0],
+        coords[i + 1][1]
+      );
+      if (result.distance < bestDist) {
+        bestDist = result.distance;
+        bestIdx = i;
+        bestProj = result.projection;
+        bestT = result.t;
+      }
+    }
+  };
+
+  scan(from, localTo);
+
+  // A normal fix is close to the cursor window and stays O(1). If that match
+  // is not trustworthy, scan the unvisited forward route once. This catches a
+  // jump around a dogleg where the local minimum is not at the window edge.
+  if (bestDist > 25 && localTo < lastSegment) {
+    scan(localTo + 1, lastSegment);
+  }
+
+  return { segmentIndex: bestIdx, distance: bestDist, projection: bestProj, t: bestT };
+}
+
+/** Precompute distance from the route start to every coordinate. */
+export function buildCumulativeDistances(coords: number[][]): number[] {
+  const cumulativeDistances = [0];
+  for (let i = 1; i < coords.length; i++) {
+    cumulativeDistances.push(
+      cumulativeDistances[i - 1] +
+        haversineDistance(coords[i - 1][1], coords[i - 1][0], coords[i][1], coords[i][0])
+    );
+  }
+  return cumulativeDistances;
+}
+
 /** Sum haversine distances between consecutive coordinates. */
 export function distanceAlongCoords(coords: number[][], fromIdx: number, toIdx: number): number {
   let dist = 0;
@@ -104,6 +167,23 @@ export function distanceAlongCoordsFromProjection(
     dist += haversineDistance(coords[i][1], coords[i][0], coords[i + 1][1], coords[i + 1][0]);
   }
   return dist;
+}
+
+/**
+ * Constant-time version of distanceAlongCoordsFromProjection for a route with
+ * precomputed cumulative coordinate distances.
+ */
+export function distanceAlongCumulativeFromProjection(
+  cumulativeDistances: number[],
+  segmentIndex: number,
+  t: number,
+  toIdx: number
+): number {
+  if (segmentIndex >= toIdx || segmentIndex + 1 >= cumulativeDistances.length) return 0;
+
+  const segmentLength = cumulativeDistances[segmentIndex + 1] - cumulativeDistances[segmentIndex];
+  const projectedDistance = cumulativeDistances[segmentIndex] + t * segmentLength;
+  return Math.max(0, cumulativeDistances[toIdx] - projectedDistance);
 }
 
 /** Map OSRM maneuver type + modifier to an icon key. */

@@ -7,19 +7,29 @@
 
 use std::io::{BufRead, BufReader, ErrorKind};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::SyncSender;
 use std::sync::Arc;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use serialport::SerialPort;
+use serialport::{SerialPort, SerialPortInfo, SerialPortType};
+
+pub enum SerialEvent {
+    Connected,
+    Disconnected,
+    Line {
+        sentence: String,
+        received_at: Instant,
+    },
+}
 
 /// Spawn the serial reader thread. Lines are sent to `tx` until `stop` is set.
 pub fn spawn_serial_reader(
-    port: String,
+    port: Option<String>,
+    port_is_override: bool,
     baud: u32,
     update_hz: u32,
-    tx: Sender<String>,
+    tx: SyncSender<SerialEvent>,
     stop: Arc<AtomicBool>,
 ) {
     thread::spawn(move || {
@@ -28,12 +38,22 @@ pub fn spawn_serial_reader(
         let max_backoff = Duration::from_secs(10);
 
         while !stop.load(Ordering::SeqCst) {
-            match serialport::new(current_port.as_str(), baud)
+            let Some(port) = current_port.clone().or_else(detect_port) else {
+                let _ = tx.send(SerialEvent::Disconnected);
+                sleep_with_stop(&stop, backoff);
+                backoff = (backoff * 2).min(max_backoff);
+                continue;
+            };
+
+            match serialport::new(&port, baud)
                 .timeout(Duration::from_millis(1000))
                 .open()
             {
                 Ok(mut sp) => {
                     backoff = Duration::from_secs(1); // reset on successful connect
+                    if tx.send(SerialEvent::Connected).is_err() {
+                        return;
+                    }
                     configure_update_rate(&mut *sp, update_hz);
 
                     let mut reader = BufReader::new(sp);
@@ -44,22 +64,39 @@ pub fn spawn_serial_reader(
                             Ok(0) => break, // EOF — device went away
                             Ok(_) => {
                                 let line = String::from_utf8_lossy(&buf).trim().to_string();
-                                if line.starts_with('$') && tx.send(line).is_err() {
-                                    return; // consumer dropped
+                                if line.starts_with('$')
+                                    && tx
+                                        .send(SerialEvent::Line {
+                                            sentence: line,
+                                            received_at: Instant::now(),
+                                        })
+                                        .is_err()
+                                {
+                                    return;
                                 }
                             }
                             Err(ref e) if e.kind() == ErrorKind::TimedOut => continue,
                             Err(_) => break, // I/O error — reconnect
                         }
                     }
+                    if !stop.load(Ordering::SeqCst) && tx.send(SerialEvent::Disconnected).is_err() {
+                        return;
+                    }
                 }
                 Err(_) => {
                     // Re-detect in case the device reappeared on another path.
-                    if let Some(detected) = detect_port() {
-                        if detected != current_port {
-                            current_port = detected;
-                            backoff = Duration::from_secs(1);
+                    if !port_is_override {
+                        if let Some(detected) = detect_port() {
+                            if current_port.as_deref() != Some(detected.as_str()) {
+                                current_port = Some(detected);
+                                backoff = Duration::from_secs(1);
+                            }
+                        } else {
+                            current_port = None;
                         }
+                    }
+                    if tx.send(SerialEvent::Disconnected).is_err() {
+                        return;
                     }
                     sleep_with_stop(&stop, backoff);
                     backoff = (backoff * 2).min(max_backoff);
@@ -89,17 +126,66 @@ fn sleep_with_stop(stop: &Arc<AtomicBool>, dur: Duration) {
     }
 }
 
-/// Auto-detect a USB GNSS serial port (Linux paths first, then macOS-style).
+/// Auto-detect a USB GNSS serial port. USB metadata is preferred over path
+/// names, and on Linux a matching `/dev/serial/by-id` alias is used when one is
+/// available so reconnects do not depend on ttyUSB numbering.
 pub fn detect_port() -> Option<String> {
     let ports = serialport::available_ports().ok()?;
-    ports
+    let mut candidates: Vec<_> = ports
+        .iter()
+        .filter(|port| is_serial_candidate(port))
+        .collect();
+    candidates.sort_by(|a, b| {
+        candidate_score(b)
+            .cmp(&candidate_score(a))
+            .then_with(|| a.port_name.cmp(&b.port_name))
+    });
+    candidates
+        .first()
+        .map(|port| stable_port_name(&port.port_name).unwrap_or_else(|| port.port_name.clone()))
+}
+
+fn is_serial_candidate(port: &SerialPortInfo) -> bool {
+    match &port.port_type {
+        SerialPortType::UsbPort(info) => {
+            usb_metadata_looks_like_gnss(info) || is_supported_receiver(info)
+        }
+        _ => false,
+    }
+}
+
+fn candidate_score(port: &SerialPortInfo) -> u8 {
+    match &port.port_type {
+        SerialPortType::UsbPort(info) if usb_metadata_looks_like_gnss(info) => 3,
+        SerialPortType::UsbPort(info) if is_supported_receiver(info) => 2,
+        _ => 0,
+    }
+}
+
+fn usb_metadata_looks_like_gnss(info: &serialport::UsbPortInfo) -> bool {
+    [info.manufacturer.as_deref(), info.product.as_deref()]
         .into_iter()
-        .map(|p| p.port_name)
-        .find(|n| {
-            n.contains("ttyUSB")
-                || n.contains("ttyACM")
-                || n.contains("usbserial")
-                || n.contains("usbmodem")
-                || n.contains("SLAB_USBtoUART")
+        .flatten()
+        .any(|value| {
+            let value = value.to_ascii_lowercase();
+            ["gps", "gnss", "ublox", "u-blox", "airoha"]
+                .iter()
+                .any(|term| value.contains(term))
         })
+}
+
+fn is_supported_receiver(info: &serialport::UsbPortInfo) -> bool {
+    // Navisys GR-M02U units documented by this project use a PL2303 bridge.
+    // Other receivers can be selected explicitly with SPEEDDECK_GPS_PORT.
+    info.vid == 0x067b && info.pid == 0x2303
+}
+
+fn stable_port_name(port_name: &str) -> Option<String> {
+    let target = std::fs::canonicalize(port_name).ok()?;
+    let entries = std::fs::read_dir("/dev/serial/by-id").ok()?;
+    entries.flatten().find_map(|entry| {
+        let path = entry.path();
+        (std::fs::canonicalize(&path).ok().as_ref() == Some(&target))
+            .then(|| path.to_string_lossy().into_owned())
+    })
 }

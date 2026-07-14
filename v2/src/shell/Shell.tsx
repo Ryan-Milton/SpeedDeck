@@ -1,11 +1,13 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { APP_BY_ID } from "../apps/registry";
+import LiveMap from "../apps/maps/LiveMap";
 import type { AppId } from "../stores/shell-store";
 import { useVehicleFeed } from "../hooks/useVehicleFeed";
 import { useNavigation } from "../hooks/useNavigation";
 import { useMediaFeed } from "../hooks/useMediaFeed";
 import { useDevNav } from "../hooks/useDevNav";
 import { useShellStore } from "../stores/shell-store";
+import { useMapStore } from "../stores/map-store";
 import Dock from "./Dock";
 import Launchpad from "./Launchpad";
 import StatusBar from "./StatusBar";
@@ -22,6 +24,14 @@ export default function Shell() {
 
   const activeApp = useShellStore((s) => s.mru[0]);
   const launchpadOpen = useShellStore((s) => s.launchpadOpen);
+
+  // Only the surfaced map-capable screen owns the single MapLibre container.
+  // Other surfaced apps detach it and therefore do not keep map work active.
+  useEffect(() => {
+    useMapStore.getState().setActiveHost(
+      activeApp === "maps" || activeApp === "dashboard" ? activeApp : null
+    );
+  }, [activeApp]);
 
   // Keep every visited app mounted and hide the inactive ones, instead of
   // remounting on each switch — tearing down Maps meant a full MapLibre
@@ -47,6 +57,7 @@ export default function Shell() {
           );
         })}
       </div>
+      <LiveMap />
       <Dock />
       <ToastHost />
       {launchpadOpen && <Launchpad />}

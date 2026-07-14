@@ -1,8 +1,13 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
-import { resolveMapStyle, checkOnlineStyle } from "./map-style";
+import {
+  resolveMapStyle,
+  checkOnlineStyle,
+  type MapStyleProvenance,
+} from "./map-style";
 import { MAP_ACCENT, MAP_ACCENT_GLOW, MAP_ROUTE_OUTLINE } from "./theme";
 import { useVehicleStore } from "../../stores/vehicle-store";
 import { useSettingsStore } from "../../stores/settings-store";
@@ -13,177 +18,292 @@ const DEFAULT_ZOOM = 16;
 const DRIVING_PITCH = 50;
 const SEATTLE: [number, number] = [-122.3321, 47.6062];
 const CAMERA_PADDING = { top: 320, bottom: 0, left: 0, right: 0 };
+const CAMERA_INTERVAL_MS = 500;
+const CAMERA_POSITION_THRESHOLD_METERS = 3;
+const CAMERA_HEADING_THRESHOLD_DEGREES = 4;
 
-// Live moving map — ported from v1 components/map/LiveMap.tsx. Driven by the
-// Tauri `vehicle:state` feed (via useVehicleStore) instead of v1's WebSocket.
-// Marker + camera are updated imperatively from a store subscription to avoid
-// re-rendering React at the GPS rate (~10 Hz).
+interface Fix {
+  lon: number;
+  lat: number;
+  heading: number;
+}
+
+// One controller is mounted by Shell for the lifetime of the UI. It owns one
+// DOM node and reparents it to the active Maps or Dashboard host.
 export default function LiveMap() {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<maplibregl.Map | null>(null);
-  const readyRef = useRef(false);
-  const lastFixRef = useRef<{ lon: number; lat: number; heading: number } | null>(null);
-  const onlineRef = useRef(false);
-
-  // --- init map once ---
   useEffect(() => {
-    if (!containerRef.current) return;
-    let cancelled = false;
+    let disposed = false;
+    let host: HTMLElement | null = null;
+    let map: maplibregl.Map | null = null;
+    let mapReady = false;
+    let initializing: Promise<void> | null = null;
+    let styleProvenance: MapStyleProvenance | null = null;
+    let styleDirty = false;
+    let sourceUnlisten: UnlistenFn | null = null;
+    let resizeFrame: number | null = null;
+    let cameraTimer: number | null = null;
+    let onlineTimer: number | null = null;
+    let pendingCamera: Fix | null = null;
+    let pendingCameraForced = false;
+    let lastFix: Fix | null = null;
+    let lastMarkerFix: Fix | null = null;
+    let lastCameraFix: Fix | null = null;
+    let lastCameraAt = 0;
+    let unsubscribeActivity: Array<() => void> = [];
 
-    (async () => {
-      const style = await resolveMapStyle();
-      if (cancelled || !containerRef.current) return;
+    const container = document.createElement("div");
+    container.className = "livemap";
 
-      const init = useVehicleStore.getState().state?.fix;
-      const center: [number, number] = init ? [init.longitude, init.latitude] : SEATTLE;
-
-      const map = new maplibregl.Map({
-        container: containerRef.current,
-        style,
-        center,
-        zoom: DEFAULT_ZOOM,
-        bearing: init?.heading ?? 0,
-        pitch: DRIVING_PITCH,
-        attributionControl: false,
-        dragRotate: true,
-      });
-      mapRef.current = map;
-
-      // A user gesture takes the camera; the recenter FAB gives it back.
-      const unfollow = (e: { originalEvent?: unknown }) => {
-        if (e.originalEvent) useMapStore.getState().setFollowing(false);
-      };
-      map.on("dragstart", unfollow);
-      map.on("zoomstart", unfollow);
-      map.on("rotatestart", unfollow);
-
-      map.on("load", () => {
-        readyRef.current = true;
-        addRouteLayers(map);
-        addVehicleLayers(map, center);
-        applyRoute(map);
-        onlineRef.current = typeof style === "string";
-        // Ensure correct sizing when embedded in a smaller pane (Dashboard).
-        map.resize();
-      });
-    })();
-
-    return () => {
-      cancelled = true;
-      mapRef.current?.remove();
-      mapRef.current = null;
-      readyRef.current = false;
+    const active = () => !disposed && host !== null;
+    const clearCameraQueue = () => {
+      if (cameraTimer !== null) window.clearTimeout(cameraTimer);
+      cameraTimer = null;
+      pendingCamera = null;
+      pendingCameraForced = false;
     };
-  }, []);
-
-  // --- follow live fixes (imperative, no React re-render) ---
-  useEffect(() => {
-    const unsub = useVehicleStore.subscribe((s) => {
-      const map = mapRef.current;
-      const fix = s.state?.fix;
-      if (!map || !readyRef.current || !fix) return;
-
-      const prev = lastFixRef.current;
-      if (prev && prev.lon === fix.longitude && prev.lat === fix.latitude) return;
-      lastFixRef.current = { lon: fix.longitude, lat: fix.latitude, heading: fix.heading };
-
-      const src = map.getSource("vehicle") as maplibregl.GeoJSONSource | undefined;
-      src?.setData(pointFeature(fix.longitude, fix.latitude));
-
-      if (!useMapStore.getState().following) return;
-
-      const orientation = useSettingsStore.getState().mapOrientation;
-      if (orientation === "north-up") {
-        map.easeTo({
-          center: [fix.longitude, fix.latitude],
-          bearing: 0,
-          pitch: 0,
-          padding: { top: 0, bottom: 0, left: 0, right: 0 },
-          duration: 250,
-        });
+    const stopOnlineChecks = () => {
+      if (onlineTimer !== null) window.clearInterval(onlineTimer);
+      onlineTimer = null;
+      window.removeEventListener("online", tryUpgradeStyle);
+    };
+    const stopActivity = () => {
+      unsubscribeActivity.forEach((unsubscribe) => unsubscribe());
+      unsubscribeActivity = [];
+      stopOnlineChecks();
+      clearCameraQueue();
+      map?.stop();
+    };
+    const scheduleResize = () => {
+      if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);
+      resizeFrame = requestAnimationFrame(() => {
+        resizeFrame = null;
+        if (active() && map) map.resize();
+      });
+    };
+    const applyCamera = (fix: Fix, duration: number, zoom?: number) => {
+      if (!map || !active()) return;
+      const northUp = useSettingsStore.getState().mapOrientation === "north-up";
+      map.easeTo({
+        center: [fix.lon, fix.lat],
+        ...(zoom === undefined ? {} : { zoom }),
+        bearing: northUp ? 0 : fix.heading,
+        pitch: northUp ? 0 : DRIVING_PITCH,
+        padding: northUp ? { top: 0, bottom: 0, left: 0, right: 0 } : CAMERA_PADDING,
+        duration,
+      });
+      lastCameraFix = fix;
+      lastCameraAt = Date.now();
+    };
+    const flushCamera = () => {
+      cameraTimer = null;
+      const fix = pendingCamera;
+      const forced = pendingCameraForced;
+      pendingCamera = null;
+      pendingCameraForced = false;
+      if (!fix || !active() || !mapReady || !useMapStore.getState().following) return;
+      if (!forced && !cameraNeedsUpdate(lastCameraFix, fix)) return;
+      applyCamera(fix, 300);
+    };
+    const queueCamera = (fix: Fix, forced = false) => {
+      if (!active() || !mapReady || !map || !useMapStore.getState().following) return;
+      if (!forced && !cameraNeedsUpdate(lastCameraFix, fix)) return;
+      pendingCamera = fix;
+      pendingCameraForced ||= forced;
+      if (cameraTimer !== null) return;
+      const delay = forced ? 0 : Math.max(0, CAMERA_INTERVAL_MS - (Date.now() - lastCameraAt));
+      if (delay === 0) {
+        flushCamera();
       } else {
-        map.easeTo({
-          center: [fix.longitude, fix.latitude],
-          bearing: fix.heading,
-          pitch: DRIVING_PITCH,
-          padding: CAMERA_PADDING,
-          duration: 250,
-        });
+        cameraTimer = window.setTimeout(flushCamera, delay);
       }
-    });
-    return unsub;
-  }, []);
-
-  // --- re-apply camera when the user toggles orientation ---
-  useEffect(() => {
-    const unsub = useSettingsStore.subscribe(() => {
-      const map = mapRef.current;
-      const fix = lastFixRef.current;
-      if (!map || !readyRef.current || !fix) return;
-      const orientation = useSettingsStore.getState().mapOrientation;
-      map.easeTo({
-        center: [fix.lon, fix.lat],
-        bearing: orientation === "north-up" ? 0 : fix.heading,
-        pitch: orientation === "north-up" ? 0 : DRIVING_PITCH,
-        padding: orientation === "north-up" ? { top: 0, bottom: 0, left: 0, right: 0 } : CAMERA_PADDING,
-        duration: 250,
-      });
-    });
-    return unsub;
-  }, []);
-
-  // --- recenter when follow mode is restored ---
-  useEffect(() => {
-    return useMapStore.subscribe((s) => {
-      const map = mapRef.current;
-      const fix = lastFixRef.current;
-      if (!s.following || !map || !readyRef.current || !fix) return;
-      const orientation = useSettingsStore.getState().mapOrientation;
-      map.easeTo({
-        center: [fix.lon, fix.lat],
-        zoom: DEFAULT_ZOOM,
-        bearing: orientation === "north-up" ? 0 : fix.heading,
-        pitch: orientation === "north-up" ? 0 : DRIVING_PITCH,
-        padding: orientation === "north-up" ? { top: 0, bottom: 0, left: 0, right: 0 } : CAMERA_PADDING,
-        duration: 400,
-      });
-    });
-  }, []);
-
-  // --- draw / clear the active route ---
-  useEffect(() => {
-    return useNavigationStore.subscribe((s, prev) => {
-      if (s.route === prev.route) return;
-      const map = mapRef.current;
-      if (map && readyRef.current) applyRoute(map);
-    });
-  }, []);
-
-  // --- upgrade to the online style if connectivity returns ---
-  useEffect(() => {
-    const tryUpgrade = async () => {
-      if (onlineRef.current || !mapRef.current || !readyRef.current) return;
+    };
+    const focusCamera = (duration: number, zoom?: number) => {
+      const fix = lastFix;
+      if (!fix || !map || !mapReady || !active()) return;
+      clearCameraQueue();
+      map.stop();
+      applyCamera(fix, duration, zoom);
+    };
+    const updateFix = () => {
+      const fix = useVehicleStore.getState().state?.fix;
+      if (!fix || !map || !mapReady || !active()) return;
+      const next = { lon: fix.longitude, lat: fix.latitude, heading: fix.heading };
+      lastFix = next;
+      if (!lastMarkerFix || lastMarkerFix.lon !== next.lon || lastMarkerFix.lat !== next.lat) {
+        const source = map.getSource("vehicle") as maplibregl.GeoJSONSource | undefined;
+        source?.setData(pointFeature(next.lon, next.lat));
+        lastMarkerFix = next;
+      }
+      queueCamera(next);
+    };
+    const ensureLayers = (target: maplibregl.Map) => {
+      if (!target.isStyleLoaded()) return;
+      const fix = lastFix ?? vehicleFix();
+      addRouteLayers(target);
+      addVehicleLayers(target, fix ? [fix.lon, fix.lat] : SEATTLE);
+      applyRoute(target);
+    };
+    const startOnlineChecks = () => {
+      if (styleProvenance !== "blank" || onlineTimer !== null) return;
+      onlineTimer = window.setInterval(tryUpgradeStyle, 10_000);
+      window.addEventListener("online", tryUpgradeStyle);
+    };
+    async function tryUpgradeStyle() {
+      if (styleProvenance !== "blank" || !active() || !map || !mapReady) return;
       const url = await checkOnlineStyle();
-      const map = mapRef.current;
-      if (!url || !map) return;
-      onlineRef.current = true;
-      map.setStyle(url);
-      map.once("styledata", () => {
-        const last = lastFixRef.current;
-        addRouteLayers(map);
-        addVehicleLayers(map, last ? [last.lon, last.lat] : SEATTLE);
-        applyRoute(map);
+      if (!url || styleProvenance !== "blank" || !active() || !map) return;
+      styleProvenance = "online";
+      map.once("style.load", () => {
+        if (!active() || !map) return;
+        ensureLayers(map);
+        updateFix();
       });
+      map.setStyle(url);
+      stopOnlineChecks();
+    }
+    async function refreshResolvedStyle() {
+      if (!map || !mapReady) return;
+      const resolved = await resolveMapStyle();
+      if (disposed || !map || !mapReady) return;
+      styleDirty = false;
+      styleProvenance = resolved.provenance;
+      map.once("style.load", () => {
+        if (!active() || !map) return;
+        ensureLayers(map);
+        updateFix();
+        startOnlineChecks();
+      });
+      map.setStyle(resolved.style);
+      stopOnlineChecks();
+    }
+    const startActivity = () => {
+      if (!active() || !map || !mapReady || unsubscribeActivity.length > 0) return;
+      if (styleDirty) {
+        void refreshResolvedStyle();
+      }
+      ensureLayers(map);
+      updateFix();
+      unsubscribeActivity = [
+        useVehicleStore.subscribe(updateFix),
+        useSettingsStore.subscribe((state, previous) => {
+          if (state.mapOrientation !== previous.mapOrientation) focusCamera(250);
+        }),
+        useMapStore.subscribe((state, previous) => {
+          if (state.following && !previous.following) focusCamera(400, DEFAULT_ZOOM);
+        }),
+        useNavigationStore.subscribe((state, previous) => {
+          if (state.route !== previous.route && map && mapReady) applyRoute(map);
+        }),
+      ];
+      startOnlineChecks();
     };
-    const id = setInterval(tryUpgrade, 10_000);
-    window.addEventListener("online", tryUpgrade);
+    const ensureMap = async () => {
+      if (map || initializing) return initializing;
+      initializing = (async () => {
+        const resolvedStyle = await resolveMapStyle();
+        if (disposed || !active() || !container.isConnected) return;
+        const fix = vehicleFix();
+        const center: [number, number] = fix ? [fix.lon, fix.lat] : SEATTLE;
+        map = new maplibregl.Map({
+          container,
+          style: resolvedStyle.style,
+          center,
+          zoom: DEFAULT_ZOOM,
+          bearing: fix?.heading ?? 0,
+          pitch: DRIVING_PITCH,
+          attributionControl: false,
+          dragRotate: true,
+        });
+        styleProvenance = resolvedStyle.provenance;
+        map.on("dragstart", unfollowCamera);
+        map.on("zoomstart", unfollowCamera);
+        map.on("rotatestart", unfollowCamera);
+        map.on("load", () => {
+          if (disposed || !map) return;
+          mapReady = true;
+          ensureLayers(map);
+          scheduleResize();
+          startActivity();
+        });
+      })();
+      try {
+        await initializing;
+      } finally {
+        initializing = null;
+      }
+    };
+    const unfollowCamera = (event: { originalEvent?: unknown }) => {
+      if (event.originalEvent) useMapStore.getState().setFollowing(false);
+    };
+    const setHost = (nextHost: HTMLElement | null) => {
+      if (host === nextHost) return;
+      stopActivity();
+      if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);
+      resizeFrame = null;
+      if (container.parentElement) container.remove();
+      host = nextHost;
+      if (!host) return;
+      host.appendChild(container);
+      if (mapReady && map) {
+        startActivity();
+        // Reparenting stops an in-progress ease. Apply the latest fix even if
+        // it matches the last requested camera target.
+        focusCamera(0);
+      }
+      void ensureMap();
+      scheduleResize();
+    };
+    const activeHost = (state = useMapStore.getState()): HTMLElement | null =>
+      state.activeHost ? state.hosts[state.activeHost] : null;
+    const unsubscribeHost = useMapStore.subscribe((state, previous) => {
+      const nextHost = activeHost(state);
+      if (nextHost !== activeHost(previous)) setHost(nextHost);
+    });
+    void listen("maps:source-changed", () => {
+      styleDirty = true;
+      if (active()) void refreshResolvedStyle();
+    })
+      .then((unlisten) => {
+        if (disposed) unlisten();
+        else sourceUnlisten = unlisten;
+      })
+      .catch(() => {});
+
+    setHost(activeHost());
     return () => {
-      clearInterval(id);
-      window.removeEventListener("online", tryUpgrade);
+      disposed = true;
+      unsubscribeHost();
+      sourceUnlisten?.();
+      setHost(null);
+      map?.remove();
     };
   }, []);
 
-  return <div ref={containerRef} className="livemap" />;
+  return null;
+}
+
+function vehicleFix(): Fix | null {
+  const fix = useVehicleStore.getState().state?.fix;
+  return fix ? { lon: fix.longitude, lat: fix.latitude, heading: fix.heading } : null;
+}
+
+function cameraNeedsUpdate(previous: Fix | null, next: Fix): boolean {
+  if (!previous) return true;
+  return (
+    distanceMeters(previous, next) >= CAMERA_POSITION_THRESHOLD_METERS ||
+    headingDifference(previous.heading, next.heading) >= CAMERA_HEADING_THRESHOLD_DEGREES
+  );
+}
+
+function distanceMeters(a: Fix, b: Fix): number {
+  const latitudeRadians = ((a.lat + b.lat) / 2) * (Math.PI / 180);
+  const latitudeDistance = (b.lat - a.lat) * 111_320;
+  const longitudeDistance = (b.lon - a.lon) * 111_320 * Math.cos(latitudeRadians);
+  return Math.hypot(latitudeDistance, longitudeDistance);
+}
+
+function headingDifference(a: number, b: number): number {
+  return Math.abs(((a - b + 540) % 360) - 180);
 }
 
 function pointFeature(lon: number, lat: number): GeoJSON.Feature {
@@ -215,14 +335,11 @@ function addRouteLayers(map: maplibregl.Map) {
   });
 }
 
-// Push the current navigation route (or clear it) into the 'route' source.
 function applyRoute(map: maplibregl.Map) {
-  const src = map.getSource("route") as maplibregl.GeoJSONSource | undefined;
-  if (!src) return;
+  const source = map.getSource("route") as maplibregl.GeoJSONSource | undefined;
+  if (!source) return;
   const route = useNavigationStore.getState().route;
-  src.setData(
-    route ? { type: "Feature", geometry: route.geometry, properties: {} } : EMPTY_LINE
-  );
+  source.setData(route ? { type: "Feature", geometry: route.geometry, properties: {} } : EMPTY_LINE);
 }
 
 function addVehicleLayers(map: maplibregl.Map, center: [number, number]) {

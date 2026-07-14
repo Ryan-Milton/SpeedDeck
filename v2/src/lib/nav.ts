@@ -8,6 +8,7 @@ import type { RouteData, SearchResult } from "../types/navigation";
 export interface NavStatus {
   routerRunning: boolean;
   installedRegion: string | null;
+  routerError: string | null;
   port: number;
 }
 
@@ -30,6 +31,7 @@ export const nav = {
     speed?: number
   ) =>
     invoke<RouteData>("calculate_route", { fromLon, fromLat, toLon, toLat, heading, speed }),
+  noteActivity: () => invoke<void>("nav_note_activity"),
   geocode: (query: string, nearLat?: number, nearLon?: number) =>
     invoke<SearchResult[]>("geocode_search", { query, nearLat, nearLon }),
   listRegions: () => invoke<NavRegion[]>("nav_list_regions"),

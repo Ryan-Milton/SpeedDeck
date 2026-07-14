@@ -1,4 +1,4 @@
-import LiveMap from "./LiveMap";
+import MapHost from "./MapHost";
 import MapOverlays from "./MapOverlays";
 import SearchOverlay from "./nav/SearchOverlay";
 import RoutePreview from "./nav/RoutePreview";
@@ -13,11 +13,12 @@ import "./nav/nav.css";
 export default function MapsApp() {
   const status = useNavigationStore((s) => s.status);
   const isOffRoute = useNavigationStore((s) => s.isOffRoute);
+  const osrmError = useNavigationStore((s) => s.osrmError);
   const setSearchOpen = useNavigationStore((s) => s.setSearchOpen);
 
   return (
     <div className="maps-app">
-      <LiveMap />
+      <MapHost id="maps" />
       <MapOverlays />
 
       {status === "idle" && (
@@ -29,6 +30,11 @@ export default function MapsApp() {
       {status === "navigating" && isOffRoute && (
         <div className="reroute-chip" role="status">
           Rerouting…
+        </div>
+      )}
+      {osrmError && (
+        <div className="reroute-chip" role="alert">
+          Navigation engine unavailable: {osrmError}
         </div>
       )}
       <TurnBanner />

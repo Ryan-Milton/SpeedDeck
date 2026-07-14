@@ -83,9 +83,11 @@ pub fn fts_search(
         }
     }
     results.sort_by(|a, b| {
-        b.importance
-            .cmp(&a.importance)
-            .then(a.distance.partial_cmp(&b.distance).unwrap_or(Ordering::Equal))
+        b.importance.cmp(&a.importance).then(
+            a.distance
+                .partial_cmp(&b.distance)
+                .unwrap_or(Ordering::Equal),
+        )
     });
     results.truncate(limit);
     results
@@ -99,16 +101,27 @@ pub fn map_nominatim(data: &Value, near: Option<(f64, f64)>) -> Vec<SearchResult
     };
     arr.iter()
         .filter_map(|item| {
-            let name = item.get("display_name").and_then(|v| v.as_str())?.to_string();
-            let lat = item.get("lat").and_then(|v| v.as_str()).and_then(|s| s.parse().ok())?;
-            let lon = item.get("lon").and_then(|v| v.as_str()).and_then(|s| s.parse().ok())?;
+            let name = item
+                .get("display_name")
+                .and_then(|v| v.as_str())?
+                .to_string();
+            let lat = item
+                .get("lat")
+                .and_then(|v| v.as_str())
+                .and_then(|s| s.parse().ok())?;
+            let lon = item
+                .get("lon")
+                .and_then(|v| v.as_str())
+                .and_then(|s| s.parse().ok())?;
             let osm_type = item.get("type").and_then(|v| v.as_str()).unwrap_or("");
             let category = match osm_type {
                 "city" | "town" | "village" | "hamlet" => "city",
                 "residential" | "primary" | "secondary" | "tertiary" => "road",
                 _ => "address",
             };
-            let distance = near.map(|(la, lo)| haversine(la, lo, lat, lon)).unwrap_or(0.0);
+            let distance = near
+                .map(|(la, lo)| haversine(la, lo, lat, lon))
+                .unwrap_or(0.0);
             Some(SearchResult {
                 name,
                 category: category.to_string(),
@@ -128,7 +141,12 @@ pub async fn nominatim_search(query: &str, near: Option<(f64, f64)>) -> Vec<Sear
     let mut req = client
         .get(NOMINATIM_URL)
         .header("User-Agent", "SpeedDeck/2.0")
-        .query(&[("q", query), ("format", "json"), ("limit", "5"), ("addressdetails", "1")]);
+        .query(&[
+            ("q", query),
+            ("format", "json"),
+            ("limit", "5"),
+            ("addressdetails", "1"),
+        ]);
     if let Some((lat, lon)) = near {
         let viewbox = format!("{},{},{},{}", lon - 0.5, lat - 0.5, lon + 0.5, lat + 0.5);
         req = req.query(&[("viewbox", viewbox.as_str()), ("bounded", "0")]);
@@ -162,7 +180,12 @@ pub async fn search(
     }
     // Street-name fallback: strip a leading house number and retry offline.
     let trimmed = query.trim();
-    if trimmed.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+    if trimmed
+        .chars()
+        .next()
+        .map(|c| c.is_ascii_digit())
+        .unwrap_or(false)
+    {
         if let Some((_, rest)) = trimmed.split_once(char::is_whitespace) {
             let retry = fts_search(db_path, rest.trim(), near, limit);
             if !retry.is_empty() {
