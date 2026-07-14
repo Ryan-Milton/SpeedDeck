@@ -22,15 +22,19 @@ import ComingSoon from "./ComingSoon";
 export interface AppMeta {
   id: AppId;
   label: string;
-  /** CSS gradient stops for the icon tile (CarPlay-style). */
+  /** CSS gradient stops for the icon tile (graphite glass; glyphs carry the
+   *  identity — per-app hues broke the phosphor-cyan HUD palette). */
   gradient: [string, string];
   Icon: ComponentType<{ size?: number }>;
   Screen: ComponentType;
-  /** Show a shortcut in the left dock. */
+  /** Pinned into the floating dock (fixed order — stable driving targets). */
   inDock: boolean;
   /** Deferred surfaces render but are visually disabled on the grid. */
   enabled: boolean;
 }
+
+// One graphite tile for every app — the glyph, not the tile color, is the badge.
+const GLASS: [string, string] = ["#232b36", "#12171f"];
 
 function PhoneApp() {
   return <ComingSoon title="Phone" phase="Deferred — added with a phone/VoIP link in a later phase" />;
@@ -40,7 +44,7 @@ export const APPS: AppMeta[] = [
   {
     id: "maps",
     label: "Maps",
-    gradient: ["#34c759", "#248a3d"],
+    gradient: GLASS,
     Icon: MapsIcon,
     Screen: MapsApp,
     inDock: true,
@@ -49,7 +53,7 @@ export const APPS: AppMeta[] = [
   {
     id: "nowplaying",
     label: "Now Playing",
-    gradient: ["#ff9f0a", "#ff6b00"],
+    gradient: GLASS,
     Icon: NowPlayingIcon,
     Screen: NowPlayingApp,
     inDock: true,
@@ -58,7 +62,7 @@ export const APPS: AppMeta[] = [
   {
     id: "music",
     label: "Music",
-    gradient: ["#fa2d48", "#c70026"],
+    gradient: GLASS,
     Icon: MusicIcon,
     Screen: MusicApp,
     inDock: false,
@@ -67,16 +71,16 @@ export const APPS: AppMeta[] = [
   {
     id: "dashboard",
     label: "Dashboard",
-    gradient: ["#0a84ff", "#0040dd"],
+    gradient: GLASS,
     Icon: DashboardIcon,
     Screen: DashboardApp,
-    inDock: false,
+    inDock: true,
     enabled: true,
   },
   {
     id: "trips",
     label: "Trips",
-    gradient: ["#5e5ce6", "#3634a3"],
+    gradient: GLASS,
     Icon: TripsIcon,
     Screen: TripsApp,
     inDock: false,
@@ -85,16 +89,16 @@ export const APPS: AppMeta[] = [
   {
     id: "phone",
     label: "Phone",
-    gradient: ["#30d158", "#1f9e3e"],
+    gradient: GLASS,
     Icon: PhoneIcon,
     Screen: PhoneApp,
-    inDock: true,
+    inDock: false,
     enabled: false,
   },
   {
     id: "settings",
     label: "Settings",
-    gradient: ["#8e8e93", "#5b5b60"],
+    gradient: GLASS,
     Icon: SettingsIcon,
     Screen: SettingsApp,
     inDock: false,

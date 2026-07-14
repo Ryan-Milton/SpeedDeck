@@ -29,5 +29,7 @@ v2/dist/
 v2/src-tauri/target/
 # Bundled binaries / large map assets are produced by build steps, not committed
 v2/src-tauri/binaries/
-v2/src-tauri/resources/*.pmtiles
+v2/src-tauri/resources/map/*.pmtiles
 v2/src-tauri/resources/osrm/
+# The v2 application lockfile is deliberately committed for reproducible builds.
+!v2/src-tauri/Cargo.lock

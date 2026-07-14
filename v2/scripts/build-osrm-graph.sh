@@ -20,7 +20,7 @@ ID="${1:?region id, e.g. western-washington}"
 PBF_URL="${2:?geofabrik .osm.pbf url}"
 PLACES_DB="${3:-}"
 
-IMG="${OSRM_IMAGE:-ghcr.io/project-osrm/osrm-backend}"
+IMG="${OSRM_IMAGE:-${SPEEDDECK_OSRM_IMAGE:-osrm/osrm-backend:v5.25.0}}"
 PROFILE="${OSRM_PROFILE:-/opt/car.lua}"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

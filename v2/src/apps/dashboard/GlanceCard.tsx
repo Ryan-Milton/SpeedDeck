@@ -7,10 +7,11 @@ import {
   speedUnitLabel,
   cardinalDirection,
   formatNavDistance,
+  METERS_TO_FEET,
 } from "../../lib/units";
 import { maneuverInstruction } from "../../lib/nav-utils";
 import ManeuverArrow from "../maps/nav/ManeuverArrow";
-import { HudPanel, Gauge } from "../../components";
+import { HudPanel, Gauge, StatGroup } from "../../components";
 
 // Next-turn while navigating; otherwise the speed gauge. Tap → Maps.
 export default function GlanceCard() {
@@ -44,11 +45,27 @@ export default function GlanceCard() {
 
   const speed = veh ? Math.round(speedConvert(veh.smoothedSpeed, unit)) : 0;
   const heading = veh ? `${Math.round(veh.fix.heading)}° ${cardinalDirection(veh.fix.heading)}` : "—";
-  const max = unit === "kmh" ? 200 : 120;
+  const max = unit === "kmh" ? 200 : unit === "knots" ? 100 : 120;
+  const spUnit = speedUnitLabel(unit).toLowerCase();
+  const maxSp = veh ? Math.round(speedConvert(veh.maxSpeed, unit)) : null;
+  const avgSp = veh ? Math.round(speedConvert(veh.avgSpeed, unit)) : null;
+  const alt =
+    veh?.fix.altitude != null
+      ? Math.round(unit === "kmh" ? veh.fix.altitude : veh.fix.altitude * METERS_TO_FEET)
+      : null;
   return (
     <HudPanel className="glance-card speed" onClick={() => openApp("maps")}>
       <Gauge value={speed} max={max} unit={speedUnitLabel(unit)} label="Speed" size={232} />
       <span className="glance-heading hud-label">{heading}</span>
+      <div className="glance-stats">
+        <StatGroup label="Max" value={maxSp ?? "—"} unit={maxSp != null ? spUnit : undefined} />
+        <StatGroup label="Avg" value={avgSp ?? "—"} unit={avgSp != null ? spUnit : undefined} />
+        <StatGroup
+          label="Alt"
+          value={alt ?? "—"}
+          unit={alt != null ? (unit === "kmh" ? "m" : "ft") : undefined}
+        />
+      </div>
     </HudPanel>
   );
 }

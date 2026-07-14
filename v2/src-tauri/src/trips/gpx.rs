@@ -7,7 +7,10 @@ pub fn export_trip_gpx(store: &TripStore, trip_id: i64) -> Result<String, String
         .get_trip(trip_id)?
         .ok_or_else(|| format!("Trip {trip_id} not found"))?;
     let points = store.get_trackpoints(trip_id)?;
-    let name = trip.name.clone().unwrap_or_else(|| format!("Trip {trip_id}"));
+    let name = trip
+        .name
+        .clone()
+        .unwrap_or_else(|| format!("Trip {trip_id}"));
 
     let mut s = String::new();
     s.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
@@ -19,7 +22,10 @@ version=\"1.1\" creator=\"SpeedDeck\">\n",
     );
     s.push_str("  <metadata>\n");
     s.push_str(&format!("    <name>{}</name>\n", xml_escape(&name)));
-    s.push_str(&format!("    <time>{}</time>\n", xml_escape(&trip.started_at)));
+    s.push_str(&format!(
+        "    <time>{}</time>\n",
+        xml_escape(&trip.started_at)
+    ));
     s.push_str("  </metadata>\n");
     s.push_str("  <trk>\n");
     s.push_str(&format!("    <name>{}</name>\n", xml_escape(&name)));
@@ -33,7 +39,10 @@ version=\"1.1\" creator=\"SpeedDeck\">\n",
         if let Some(alt) = p.altitude {
             s.push_str(&format!("        <ele>{alt:.1}</ele>\n"));
         }
-        s.push_str(&format!("        <time>{}</time>\n", xml_escape(&p.timestamp)));
+        s.push_str(&format!(
+            "        <time>{}</time>\n",
+            xml_escape(&p.timestamp)
+        ));
         if p.speed.is_some() || p.heading.is_some() {
             s.push_str("        <extensions>\n");
             if let Some(sp) = p.speed {

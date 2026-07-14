@@ -1,0 +1,4 @@
+[toolchain]
+# Keep local, CI, and Docker Cargo resolution on the same Rust release.
+channel = "1.89.0"
+profile = "minimal"

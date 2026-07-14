@@ -3,16 +3,42 @@
 // from here in later phases.
 
 import { create } from "zustand";
-import type { VehicleState } from "../lib/ipc";
+import type { ReceiverHealth, TripStatus, VehicleState } from "../lib/ipc";
 
 interface VehicleStore {
   state: VehicleState | null;
-  connected: boolean;
+  health: ReceiverHealth | null;
+  latestSequence: number;
+  tripStatus: TripStatus;
   setState: (state: VehicleState) => void;
+  setHealth: (health: ReceiverHealth) => void;
+  setTripStatus: (status: TripStatus) => void;
 }
 
 export const useVehicleStore = create<VehicleStore>((set) => ({
   state: null,
-  connected: false,
-  setState: (state) => set({ state, connected: true }),
+  health: null,
+  latestSequence: 0,
+  tripStatus: "idle",
+  setState: (state) =>
+    set((current) => {
+      if (state.sequence <= current.latestSequence) return {};
+      return {
+        state,
+        health: {
+          sequence: state.sequence,
+          source: state.source,
+          status: state.receiverStatus,
+        },
+        latestSequence: state.sequence,
+        tripStatus: state.tripStatus,
+      };
+    }),
+  setHealth: (health) =>
+    set((current) =>
+      health.sequence > current.latestSequence
+        ? { health, state: null, latestSequence: health.sequence }
+        : {}
+    ),
+  setTripStatus: (tripStatus) => set({ tripStatus }),
 }));

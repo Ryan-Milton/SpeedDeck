@@ -1,5 +1,5 @@
 {
-  "$comment": "Regions for offline maps (PMTiles) and navigation (OSRM graph + geocoder). `bbox` is minLon,minLat,maxLon,maxLat. download-tiles.sh extracts map tiles into <id>.pmtiles. build-osrm-graph.sh / build-places-db.sh produce a nav pack (<id>.zip of region.osrm* + places.db); host it and set `navPackUrl`, or sideload by extracting into <app-data>/nav/<id>/. Empty navPackUrl = download disabled (sideload only).",
+  "$comment": "Regions for offline maps (PMTiles) and navigation (OSRM graph + geocoder). `bbox` is minLon,minLat,maxLon,maxLat. download-tiles.sh extracts map tiles into <id>.pmtiles. Release builds require every declared non-empty PMTiles file beside this manifest; these generated assets are not committed. build-osrm-graph.sh / build-places-db.sh produce a nav pack (<id>.zip of region.osrm* + places.db); host it and set `navPackUrl`, or sideload by extracting into <app-data>/nav/<id>/. Empty navPackUrl = download disabled (sideload only). Optional `navPackSha256` and `navPackSizeBytes` fields verify hosted archives before installation.",
   "regions": [
     {
       "id": "seattle",

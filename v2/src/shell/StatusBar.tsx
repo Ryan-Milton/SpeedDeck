@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useVehicleStore } from "../stores/vehicle-store";
+import { useNavigationStore } from "../stores/navigation-store";
 
 function useClock(): string {
   const [now, setNow] = useState(() => new Date());
@@ -10,22 +11,37 @@ function useClock(): string {
   return now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
-// HUD top status bar: wordmark on the left, GPS chip + clock on the right.
+// HUD top status bar: current street (wordmark fallback) on the left,
+// GPS chip + clock on the right. The street name is already computed every
+// GPS tick by the nav store — this is its first consumer.
 export default function StatusBar() {
   const time = useClock();
   const state = useVehicleStore((s) => s.state);
-  const connected = useVehicleStore((s) => s.connected);
+  const health = useVehicleStore((s) => s.health);
+  const street = useNavigationStore((s) => s.currentStreetName);
 
-  const hasFix = !!state && state.fix.fixQuality > 0;
+  const hasFix = health?.status === "fix";
+  const connected = health?.status === "connected" || health?.status === "nofix";
   const sats = state?.fix.satellites ?? 0;
+  const label = hasFix
+    ? `${sats} sat · fix`
+    : health?.status === "stale"
+      ? "gps stale"
+      : connected
+        ? "no fix"
+        : "no gps";
 
   return (
     <div className="statusbar">
-      <span className="status-left">SpeedDeck</span>
+      {street ? (
+        <span className="status-left street truncate">{street}</span>
+      ) : (
+        <span className="status-left">SpeedDeck</span>
+      )}
       <span className="status-right">
         <span className="gps-chip">
           <span className={`gps-dot ${hasFix ? "ok" : connected ? "weak" : "off"}`} />
-          <span className="gps-label">{connected ? `${sats} sat · fix` : "no gps"}</span>
+          <span className="gps-label">{label}</span>
         </span>
         <span className="status-clock">{time}</span>
       </span>

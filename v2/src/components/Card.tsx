@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
+import { pressableProps } from "./interactive";
 
 export function Card({
   className,
@@ -13,9 +14,9 @@ export function Card({
 }) {
   return (
     <div
-      className={["hud-card", className].filter(Boolean).join(" ")}
+      className={["hud-card", onClick ? "tappable" : "", className].filter(Boolean).join(" ")}
       style={style}
-      onClick={onClick}
+      {...pressableProps(onClick)}
     >
       {children}
     </div>

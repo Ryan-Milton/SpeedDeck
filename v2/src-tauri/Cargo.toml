@@ -4,7 +4,7 @@ version = "2.0.0"
 description = "CarPlay-style in-car infotainment for the Steam Deck"
 authors = ["SpeedDeck"]
 edition = "2021"
-rust-version = "1.77"
+rust-version = "1.89"
 
 # The Tauri app logic lives in a library so it can be reused (tests, future
 # mobile target); the binary is a thin launcher.
@@ -27,6 +27,7 @@ serialport = "4"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
+sha2 = "0.10"
 tokio = { version = "1", features = ["time"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
 
@@ -34,3 +35,10 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 # this feature is used for production builds or when a dev server is not
 # specified, DO NOT REMOVE!!
 custom-protocol = ["tauri/custom-protocol"]
+
+# These settings reduce release binary size and improve steady-state code
+# generation. Validate target-device performance before changing them.
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"

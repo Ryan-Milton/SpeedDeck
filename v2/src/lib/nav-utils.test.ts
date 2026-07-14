@@ -2,7 +2,10 @@ import { describe, it, expect } from "vitest";
 import {
   pointToSegmentDistance,
   findNearestRoutePoint,
+  findNearestRoutePointFromCursor,
+  buildCumulativeDistances,
   distanceAlongCoordsFromProjection,
+  distanceAlongCumulativeFromProjection,
   computeBearing,
   angleDifference,
   speedAdaptiveThreshold,
@@ -41,6 +44,45 @@ describe("findNearestRoutePoint", () => {
   });
 });
 
+describe("findNearestRoutePointFromCursor", () => {
+  it("escapes a local minimum before a later dogleg segment", () => {
+    const dogleg = [
+      ...Array.from({ length: 21 }, (_, index) => [-0.01 + index * 0.001, 0.001]),
+      ...Array.from({ length: 60 }, (_, index) => [0.01, 0.0012 + index * 0.0002]),
+      ...Array.from({ length: 31 }, (_, index) => [0.01 * (1 - index / 30), 0.013 * (1 - index / 30)]),
+    ];
+
+    const nearest = findNearestRoutePointFromCursor(0, 0, dogleg, 0);
+
+    expect(nearest.segmentIndex).toBeGreaterThan(90);
+    expect(nearest.distance).toBeLessThan(1);
+  });
+
+  it("progresses through routes longer than a fixed segment window", () => {
+    const longRoute = Array.from({ length: 3_001 }, (_, index) => [
+      -122.34 + index * 0.00001,
+      47.606,
+    ]);
+
+    const first = findNearestRoutePointFromCursor(
+      longRoute[1_500][0],
+      longRoute[1_500][1],
+      longRoute,
+      0
+    );
+    expect(first.segmentIndex).toBeGreaterThan(1_400);
+
+    const second = findNearestRoutePointFromCursor(
+      longRoute[2_700][0],
+      longRoute[2_700][1],
+      longRoute,
+      first.segmentIndex
+    );
+    expect(second.segmentIndex).toBeGreaterThan(2_600);
+    expect(second.segmentIndex).toBeGreaterThan(first.segmentIndex);
+  });
+});
+
 describe("distanceAlongCoordsFromProjection", () => {
   it("sums remaining route distance", () => {
     // From the very start to the end ≈ 3 segments * ~150 m.
@@ -50,6 +92,23 @@ describe("distanceAlongCoordsFromProjection", () => {
   });
   it("returns 0 when already at/after target", () => {
     expect(distanceAlongCoordsFromProjection(ROUTE, 3, 0.5, 2)).toBe(0);
+  });
+});
+
+describe("cumulative route distances", () => {
+  it("matches the legacy projected-distance calculation", () => {
+    const cumulative = buildCumulativeDistances(ROUTE);
+    const legacyDistance = distanceAlongCoordsFromProjection(ROUTE, 1, 0.25, ROUTE.length - 1);
+    const cumulativeDistance = distanceAlongCumulativeFromProjection(
+      cumulative,
+      1,
+      0.25,
+      ROUTE.length - 1
+    );
+
+    expect(cumulative).toHaveLength(ROUTE.length);
+    expect(cumulative[0]).toBe(0);
+    expect(cumulativeDistance).toBeCloseTo(legacyDistance, 8);
   });
 });
 

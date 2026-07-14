@@ -1,134 +1,353 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# SpeedDeck v2 — Steam Deck (SteamOS) installer.
-# Installs the AppImage, a udev rule for the USB GPS receiver, a systemd *user*
-# service, and a udev-triggered auto-launch on GPS connect. Falls back to the
-# "Add as Non-Steam Game" flow for Gaming Mode.
-#
-# Usage: bash setup-steamos.sh [path-to-SpeedDeck.AppImage]
-#
-# SteamOS notes: the rootfs is immutable, so the service lives under the user's
-# ~/.config; only the udev rule (in /etc) needs sudo.
+# SpeedDeck v2 SteamOS installer. It installs a user-owned AppImage, grants the
+# active local session access to explicitly selected USB serial receivers, and
+# provides (but never enables) a user service for manual Desktop Mode launches.
 
 APP_NAME="SpeedDeck"
-USER_NAME="$(id -un)"
-USER_UID="$(id -u)"
+DEFAULT_RECEIVER="067b:2303" # Prolific PL2303, the receiver supported by v1.
 INSTALL_DIR="$HOME/Applications"
 DEST="$INSTALL_DIR/$APP_NAME.AppImage"
-BIN_DIR="$HOME/.local/bin"
-LAUNCH_HELPER="$BIN_DIR/speeddeck-udev-launch.sh"
-UDEV_FILE="/etc/udev/rules.d/99-speeddeck-gps.rules"
+UDEV_FILE="/etc/udev/rules.d/72-speeddeck-gps.rules"
+LEGACY_UDEV_FILE="/etc/udev/rules.d/99-speeddeck-gps.rules"
 UNIT_FILE="$HOME/.config/systemd/user/speeddeck.service"
 DESKTOP_FILE="$HOME/.local/share/applications/SpeedDeck.desktop"
+LEGACY_LAUNCH_HELPER="$HOME/.local/bin/speeddeck-udev-launch.sh"
 
-echo "=== SpeedDeck — SteamOS Setup ==="
+MODE="install"
+APPIMAGE=""
+RECEIVER_INPUTS=()
+RECEIVERS=()
 
-# --- 1. Locate + install the AppImage ---
-APPIMAGE="${1:-}"
-if [[ -z "$APPIMAGE" ]]; then
-  APPIMAGE="$(ls -1 \
-    ~/Downloads/SpeedDeck*.AppImage \
-    ~/Desktop/SpeedDeck*.AppImage \
-    ./SpeedDeck*.AppImage \
-    ./src-tauri/target/release/bundle/appimage/*.AppImage \
-    2>/dev/null | head -1 || true)"
-fi
-if [[ -z "$APPIMAGE" || ! -f "$APPIMAGE" ]]; then
-  echo "Error: no AppImage found. Usage: bash setup-steamos.sh /path/to/SpeedDeck.AppImage" >&2
-  exit 1
-fi
-mkdir -p "$INSTALL_DIR"
-cp "$APPIMAGE" "$DEST"
-chmod +x "$DEST"
-echo "[1/5] Installed AppImage -> $DEST"
+usage() {
+  cat <<'EOF'
+Usage: bash setup-steamos.sh [options] [path-to-SpeedDeck.AppImage]
 
-# --- 2. udev: serial access + auto-launch on GPS connect ---
-# Common USB GNSS / USB-serial bridge vendor IDs (broadened beyond v1's 067b):
-#   067b Prolific PL2303 · 10c4 Silicon Labs CP210x · 0403 FTDI ·
-#   1546 u-blox · 1a86 QinHeng CH340 · 067b/2303 PL2303 variants
-VENDORS=(067b 10c4 0403 1546 1a86)
+Options:
+  --receiver VID:PID  Grant the active local session access to this USB receiver.
+                       May be supplied more than once.
+  --dry-run           Validate inputs and print the udev rule without changing files.
+  --check             Report installed configuration and connected receiver permissions.
+  -h, --help          Show this help.
 
-mkdir -p "$BIN_DIR"
-cat > "$LAUNCH_HELPER" <<EOF
-#!/usr/bin/env bash
-# Triggered by udev (as root) when the GPS receiver is plugged in; starts the
-# SpeedDeck user service in ${USER_NAME}'s graphical session.
-export XDG_RUNTIME_DIR="/run/user/${USER_UID}"
-/usr/bin/systemctl --user --machine="${USER_NAME}@.host" start speeddeck.service \
-  || /usr/bin/su "${USER_NAME}" -c "XDG_RUNTIME_DIR=/run/user/${USER_UID} /usr/bin/systemctl --user start speeddeck.service"
+Set SPEEDDECK_RECEIVER_VID_PID to a comma-separated list instead of --receiver,
+for example: SPEEDDECK_RECEIVER_VID_PID=1546:01a7,067b:2303.
+
+If no receiver is configured, the exact v1 receiver ID 067b:2303 is used. Find
+the ID for another receiver with: lsusb
 EOF
-chmod +x "$LAUNCH_HELPER"
+}
 
-{
-  echo "# SpeedDeck — USB GPS receiver: non-root access + auto-launch"
-  for v in "${VENDORS[@]}"; do
-    echo "SUBSYSTEM==\"tty\", ATTRS{idVendor}==\"$v\", MODE=\"0660\", TAG+=\"uaccess\""
+fail() {
+  echo "Error: $*" >&2
+  exit 1
+}
+
+add_receiver() {
+  local receiver="$1"
+  local existing
+
+  receiver="$(printf '%s' "$receiver" | tr '[:upper:]' '[:lower:]')"
+  [[ "$receiver" =~ ^[[:xdigit:]]{4}:[[:xdigit:]]{4}$ ]] \
+    || fail "receiver must be an exact four-digit hexadecimal VID:PID, got: $1"
+  for existing in "${RECEIVERS[@]:-}"; do
+    [[ "$existing" == "$receiver" ]] && return
   done
-  for v in "${VENDORS[@]}"; do
-    echo "ACTION==\"add\", SUBSYSTEM==\"tty\", ATTRS{idVendor}==\"$v\", RUN+=\"$LAUNCH_HELPER\""
+  RECEIVERS+=("$receiver")
+}
+
+add_receiver_list() {
+  local list="$1"
+  local receiver
+  local -a receiver_list
+  local IFS=','
+  read -r -a receiver_list <<< "$list"
+  for receiver in "${receiver_list[@]}"; do
+    [[ -n "$receiver" ]] || fail "receiver list contains an empty VID:PID"
+    add_receiver "$receiver"
   done
-} | sudo tee "$UDEV_FILE" > /dev/null
+}
+
+while (($#)); do
+  case "$1" in
+    --receiver)
+      (($# >= 2)) || fail "--receiver requires VID:PID"
+      RECEIVER_INPUTS+=("$2")
+      shift 2
+      ;;
+    --dry-run)
+      [[ "$MODE" == "install" ]] || fail "--dry-run cannot be combined with --check"
+      MODE="dry-run"
+      shift
+      ;;
+    --check)
+      [[ "$MODE" == "install" ]] || fail "--check cannot be combined with --dry-run"
+      MODE="check"
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    -*)
+      fail "unknown option: $1"
+      ;;
+    *)
+      [[ -z "$APPIMAGE" ]] || fail "only one AppImage path may be supplied"
+      APPIMAGE="$1"
+      shift
+      ;;
+  esac
+done
+
+if [[ -n "${SPEEDDECK_RECEIVER_VID_PID:-}" ]]; then
+  add_receiver_list "$SPEEDDECK_RECEIVER_VID_PID"
+fi
+for receiver in "${RECEIVER_INPUTS[@]}"; do
+  add_receiver "$receiver"
+done
+if ((${#RECEIVERS[@]} == 0)); then
+  add_receiver "$DEFAULT_RECEIVER"
+fi
+
+write_udev_rule() {
+  local receiver vid pid
+  echo "# SpeedDeck USB GNSS receiver access. Generated by setup-steamos.sh."
+  echo "# This intentionally has no RUN action: udev must not launch user-owned code as root."
+  for receiver in "${RECEIVERS[@]}"; do
+    IFS=: read -r vid pid <<< "$receiver"
+    echo "SUBSYSTEM==\"tty\", ATTRS{idVendor}==\"$vid\", ATTRS{idProduct}==\"$pid\", TAG+=\"uaccess\""
+  done
+}
+
+find_appimage() {
+  local candidates=()
+  shopt -s nullglob
+  candidates=(
+    "$HOME"/Downloads/SpeedDeck*.AppImage
+    "$HOME"/Desktop/SpeedDeck*.AppImage
+    ./SpeedDeck*.AppImage
+    ./src-tauri/target/release/bundle/appimage/*.AppImage
+  )
+  shopt -u nullglob
+  APPIMAGE="${candidates[0]:-}"
+}
+
+check_configuration() {
+  local receiver vid pid usb_path usb_vid usb_pid tty_path device properties state
+  local udev_contents expected_udev unit_contents connected matched accessible
+  local status=0
+
+  echo "=== SpeedDeck SteamOS diagnostics ==="
+  echo "Configured receiver IDs: ${RECEIVERS[*]}"
+
+  [[ -x "$DEST" ]] && echo "PASS AppImage is executable: $DEST" \
+    || { echo "FAIL AppImage is missing or not executable: $DEST"; status=1; }
+  if [[ -f "$UDEV_FILE" ]]; then
+    udev_contents="$(<"$UDEV_FILE")"
+    expected_udev="$(write_udev_rule)"
+    if [[ "$udev_contents" == "$expected_udev" ]]; then
+      echo "PASS udev rule contains only the configured exact receiver IDs: $UDEV_FILE"
+    else
+      echo "FAIL udev rule differs from the exact-ID rule generated for this configuration: $UDEV_FILE"
+      status=1
+    fi
+  else
+    echo "FAIL udev rule is missing: $UDEV_FILE"
+    status=1
+  fi
+  if [[ -e "$LEGACY_UDEV_FILE" ]]; then
+    echo "FAIL legacy late udev rule must be removed: $LEGACY_UDEV_FILE"
+    status=1
+  else
+    echo "PASS legacy late udev rule is absent: $LEGACY_UDEV_FILE"
+  fi
+  if [[ -f "$UNIT_FILE" ]]; then
+    unit_contents="$(<"$UNIT_FILE")"
+    if grep -qx '\[Install\]' "$UNIT_FILE" || [[ "$unit_contents" == *"--no-sandbox"* ]] \
+      || [[ "$unit_contents" != *"After=graphical-session.target"* ]] \
+      || [[ "$unit_contents" != *"PartOf=graphical-session.target"* ]]; then
+      echo "FAIL user service is not the expected manual, graphical-session service: $UNIT_FILE"
+      status=1
+    else
+      echo "PASS user service is installed as a manual graphical-session service: $UNIT_FILE"
+    fi
+  else
+    echo "FAIL user service is missing: $UNIT_FILE"
+    status=1
+  fi
+
+  if command -v systemctl >/dev/null 2>&1 && [[ -f "$UNIT_FILE" ]]; then
+    state="$(systemctl --user is-enabled speeddeck.service 2>/dev/null || true)"
+    if [[ -z "$state" ]]; then
+      echo "FAIL unable to determine whether speeddeck.service is enabled"
+      status=1
+    elif [[ "$state" == enabled* ]]; then
+      echo "FAIL speeddeck.service is enabled ($state); disable it with: systemctl --user disable speeddeck.service"
+      status=1
+    else
+      echo "PASS speeddeck.service is not enabled at login (${state:-not enabled})"
+    fi
+  elif [[ -f "$UNIT_FILE" ]]; then
+    echo "FAIL systemctl is required to verify that speeddeck.service is not enabled"
+    status=1
+  fi
+
+  for receiver in "${RECEIVERS[@]}"; do
+    IFS=: read -r vid pid <<< "$receiver"
+    connected=0
+    matched=0
+    accessible=0
+
+    for usb_path in /sys/bus/usb/devices/*; do
+      [[ -r "$usb_path/idVendor" && -r "$usb_path/idProduct" ]] || continue
+      read -r usb_vid < "$usb_path/idVendor"
+      read -r usb_pid < "$usb_path/idProduct"
+      if [[ "$usb_vid" == "$vid" && "$usb_pid" == "$pid" ]]; then
+        connected=1
+        break
+      fi
+    done
+
+    if ((connected == 0)); then
+      echo "INFO USB receiver not connected: $receiver"
+      continue
+    fi
+    echo "PASS USB receiver connected: $receiver"
+
+    for tty_path in /sys/class/tty/*; do
+      [[ -e "$tty_path" ]] || continue
+      device="/dev/${tty_path##*/}"
+      [[ -e "$device" ]] || continue
+      properties="$(udevadm info --query=property --path="$tty_path" 2>/dev/null || true)"
+      if [[ "$properties" == *"ID_VENDOR_ID=$vid"* && "$properties" == *"ID_MODEL_ID=$pid"* ]]; then
+        matched=1
+        if [[ -r "$device" && -w "$device" ]]; then
+          echo "PASS receiver port is readable and writable: $device ($receiver)"
+          accessible=1
+        else
+          echo "INFO matching receiver port lacks current-session access: $device ($receiver)"
+        fi
+      fi
+    done
+
+    if ((accessible == 0)); then
+      if ((matched == 0)); then
+        echo "FAIL connected receiver has no matching tty enumerated by sysfs/udev: $receiver"
+      else
+        echo "FAIL connected receiver has no readable and writable tty: $receiver"
+      fi
+      echo "     Reconnect it after installing the rule, then run this check from Desktop Mode."
+      status=1
+    fi
+  done
+
+  return "$status"
+}
+
+if [[ "$MODE" == "check" ]]; then
+  check_configuration
+  exit $?
+fi
+
+[[ -n "$APPIMAGE" ]] || find_appimage
+[[ -n "$APPIMAGE" && -f "$APPIMAGE" && -r "$APPIMAGE" ]] \
+  || fail "no readable AppImage found. Usage: bash setup-steamos.sh [--receiver VID:PID] /path/to/SpeedDeck.AppImage"
+
+if [[ "$MODE" == "dry-run" ]]; then
+  echo "=== SpeedDeck SteamOS setup dry run ==="
+  echo "Would install AppImage: $APPIMAGE -> $DEST"
+  echo "Would install static user service: $UNIT_FILE"
+  echo "Would install desktop entry: $DESKTOP_FILE"
+  echo "Would install udev rule: $UDEV_FILE"
+  echo "Would remove legacy udev rule: $LEGACY_UDEV_FILE"
+  write_udev_rule
+  exit 0
+fi
+
+echo "=== SpeedDeck SteamOS Setup ==="
+
+mkdir -p "$INSTALL_DIR"
+install_tmp=""
+udev_tmp=""
+cleanup() {
+  rm -f "${install_tmp:-}" "${udev_tmp:-}"
+}
+trap cleanup EXIT
+install_tmp="$(mktemp "$INSTALL_DIR/.${APP_NAME}.AppImage.XXXXXX")"
+cp "$APPIMAGE" "$install_tmp"
+chmod 0755 "$install_tmp"
+mv -f "$install_tmp" "$DEST"
+install_tmp=""
+echo "[1/4] Installed AppImage -> $DEST"
+
+# This was created by pre-hardening installers and was invoked from udev as root.
+rm -f "$LEGACY_LAUNCH_HELPER"
+
+udev_tmp="$(mktemp)"
+write_udev_rule > "$udev_tmp"
+sudo install -d -m 0755 /etc/udev/rules.d
+sudo install -m 0644 "$udev_tmp" "$UDEV_FILE"
+sudo rm -f "$LEGACY_UDEV_FILE"
 sudo udevadm control --reload-rules
-sudo udevadm trigger
-echo "[2/5] Installed udev rule -> $UDEV_FILE (vendors: ${VENDORS[*]})"
+echo "[2/4] Installed exact VID:PID udev rule -> $UDEV_FILE (${RECEIVERS[*]})"
+echo "      Reconnect the receiver to apply access to an already-connected device."
 
-# --- 3. systemd user service ---
 mkdir -p "$(dirname "$UNIT_FILE")"
 cat > "$UNIT_FILE" <<EOF
 [Unit]
-Description=SpeedDeck CarPlay
+Description=SpeedDeck CarPlay (manual Desktop Mode launch)
 After=graphical-session.target
 PartOf=graphical-session.target
 
 [Service]
 Type=simple
-ExecStart=%h/Applications/$APP_NAME.AppImage --no-sandbox
+WorkingDirectory=%h
+ExecStart=%h/Applications/$APP_NAME.AppImage
 Restart=on-failure
 RestartSec=3
 
-[Install]
-WantedBy=default.target
+# No [Install] section: this service must not start at login or on USB hotplug.
 EOF
 systemctl --user daemon-reload
-systemctl --user enable speeddeck.service >/dev/null 2>&1 || true
-echo "[3/5] Installed systemd user service -> $UNIT_FILE"
+# Remove enablement left by installers before this service became manual-only.
+systemctl --user disable speeddeck.service >/dev/null 2>&1 || true
+service_state="$(systemctl --user is-enabled speeddeck.service 2>/dev/null || true)"
+[[ -n "$service_state" ]] || fail "unable to verify speeddeck.service enablement state"
+[[ "$service_state" != enabled* ]] \
+  || fail "speeddeck.service remains enabled after migration ($service_state)"
+echo "[3/4] Installed static user service -> $UNIT_FILE"
 
-# --- 4. Desktop entry (Gaming Mode / launcher) ---
 mkdir -p "$(dirname "$DESKTOP_FILE")"
 cat > "$DESKTOP_FILE" <<EOF
 [Desktop Entry]
 Name=$APP_NAME
-Exec="$DEST" --no-sandbox
+Exec="$DEST"
+TryExec=$DEST
 Icon=$APP_NAME
 Type=Application
 Categories=Utility;
 Comment=CarPlay-style infotainment for the Steam Deck
 Terminal=false
 EOF
-echo "[4/5] Created desktop entry -> $DESKTOP_FILE"
+echo "[4/4] Created desktop entry -> $DESKTOP_FILE"
 
-# --- 5. Next steps ---
-echo "[5/5] Done."
 cat <<EOF
 
-=== Next steps ===
+Manual launch only (Desktop Mode):
+  $DEST
+  # or: systemctl --user start speeddeck.service
 
-Auto-boot (Desktop Mode — the supported kiosk path):
-  • Set the Deck to boot into Desktop Mode (KDE Plasma).
-  • Plug in the USB GPS receiver — udev starts speeddeck.service automatically,
-    and the app opens fullscreen. (Or run: systemctl --user start speeddeck.service)
+No process is launched by USB connect or at login. SpeedDeck's live receiver
+handling reconnects while the app is running; launch it after the receiver is
+connected when you want to use it.
 
-Gaming Mode (manual launch):
-  1. Desktop Mode → Steam → Games → Add a Non-Steam Game → "$APP_NAME".
-  2. Right-click → Properties → Launch Options:  --no-sandbox
-  3. Right-click → Controller Layout → enable Touchscreen Native Support.
-  4. Switch to Gaming Mode and launch.
+Permission diagnostics:
+  bash "$(realpath "$0")" --check --receiver ${RECEIVERS[0]}
+  # Add --receiver for each additional configured receiver, or set
+  # SPEEDDECK_RECEIVER_VID_PID=VID1:PID1,VID2:PID2.
 
-GPS receiver:
-  • Connect via USB-C; it appears at /dev/ttyUSB0 (or /dev/ttyACM0).
-  • Allow ~24 s for the first satellite fix.
-  • The udev rule grants access for vendors: ${VENDORS[*]} — if your receiver
-    isn't detected, find its id with 'lsusb' and add it to $UDEV_FILE.
-
+Gaming Mode: add "$DEST" as a Non-Steam Game and launch it normally. Do not add
+--no-sandbox; this AppImage does not require a sandbox bypass.
 EOF

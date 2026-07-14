@@ -31,6 +31,9 @@
     "category": "Utility",
     "shortDescription": "CarPlay-style infotainment for the Steam Deck",
     "longDescription": "SpeedDeck is a self-contained, CarPlay-style in-car infotainment app for the Steam Deck: offline maps with turn-by-turn navigation driven by a USB GPS receiver, local music, trip recording, and a dashboard split view.",
+    "resources": {
+      "resources/map": "map"
+    },
     "externalBin": ["binaries/osrm-routed"],
     "icon": [
       "icons/32x32.png",

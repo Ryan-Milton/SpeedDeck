@@ -9,7 +9,7 @@ use std::time::Instant;
 use serde::Serialize;
 
 use crate::geo::distance_3d;
-use crate::vehicle::VehicleSample;
+use crate::vehicle::{ReceiverStatus, VehicleSample};
 
 const SMOOTHING_ALPHA: f64 = 0.3;
 const ALTITUDE_ALPHA: f64 = 0.2;
@@ -53,6 +53,8 @@ pub struct FixSnapshot {
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VehicleState {
+    pub sequence: u64,
+    pub receiver_status: ReceiverStatus,
     pub fix: FixSnapshot,
     pub smoothed_speed: f64,
     pub max_speed: f64,
@@ -118,14 +120,15 @@ impl DataProcessor {
     }
 
     /// Process a raw sample into a full state snapshot.
-    pub fn process(&mut self, sample: &VehicleSample) -> VehicleState {
+    pub fn process(&mut self, sample: &VehicleSample, sequence: u64) -> VehicleState {
         let speed = sample.speed_mps;
 
         // EMA speed smoothing.
         if self.speed_count == 0 {
             self.smoothed_speed = speed;
         } else {
-            self.smoothed_speed = SMOOTHING_ALPHA * speed + (1.0 - SMOOTHING_ALPHA) * self.smoothed_speed;
+            self.smoothed_speed =
+                SMOOTHING_ALPHA * speed + (1.0 - SMOOTHING_ALPHA) * self.smoothed_speed;
         }
 
         // Session max.
@@ -166,6 +169,8 @@ impl DataProcessor {
         self.prev_alt = alt_for_fix;
 
         VehicleState {
+            sequence,
+            receiver_status: ReceiverStatus::Fix,
             fix: FixSnapshot {
                 timestamp: now_rfc3339(),
                 latitude: sample.latitude,
@@ -303,16 +308,18 @@ mod tests {
     #[test]
     fn first_sample_seeds_smoothed_speed() {
         let mut p = DataProcessor::new();
-        let s = p.process(&sample(10.0, 47.0, -122.0, Some(50.0)));
+        let s = p.process(&sample(10.0, 47.0, -122.0, Some(50.0)), 1);
         assert!((s.smoothed_speed - 10.0).abs() < 1e-9);
         assert!((s.max_speed - 10.0).abs() < 1e-9);
+        assert_eq!(s.sequence, 1);
+        assert_eq!(s.receiver_status, ReceiverStatus::Fix);
     }
 
     #[test]
     fn ema_pulls_toward_new_value() {
         let mut p = DataProcessor::new();
-        p.process(&sample(10.0, 47.0, -122.0, None));
-        let s = p.process(&sample(0.0, 47.0, -122.0, None));
+        p.process(&sample(10.0, 47.0, -122.0, None), 1);
+        let s = p.process(&sample(0.0, 47.0, -122.0, None), 2);
         // 0.3*0 + 0.7*10 = 7.0
         assert!((s.smoothed_speed - 7.0).abs() < 1e-9);
     }
@@ -320,10 +327,10 @@ mod tests {
     #[test]
     fn trip_distance_accumulates_only_when_recording_and_moving() {
         let mut p = DataProcessor::new();
-        p.process(&sample(10.0, 47.0000, -122.0, None)); // not recording yet
+        p.process(&sample(10.0, 47.0000, -122.0, None), 1); // not recording yet
         p.start_trip();
-        p.process(&sample(10.0, 47.0010, -122.0, None));
-        let s = p.process(&sample(10.0, 47.0020, -122.0, None));
+        p.process(&sample(10.0, 47.0010, -122.0, None), 2);
+        let s = p.process(&sample(10.0, 47.0020, -122.0, None), 3);
         assert!(s.trip_distance > 100.0, "got {}", s.trip_distance);
         assert_eq!(s.trip_status, "recording");
     }
@@ -332,8 +339,8 @@ mod tests {
     fn drift_below_threshold_is_ignored_for_distance() {
         let mut p = DataProcessor::new();
         p.start_trip();
-        p.process(&sample(0.1, 47.0, -122.0, None));
-        let s = p.process(&sample(0.1, 47.01, -122.0, None));
+        p.process(&sample(0.1, 47.0, -122.0, None), 1);
+        let s = p.process(&sample(0.1, 47.01, -122.0, None), 2);
         assert_eq!(s.trip_distance, 0.0);
     }
 
@@ -344,14 +351,18 @@ mod tests {
         let mut p = DataProcessor::new();
         p.start_trip();
         sleep(Duration::from_millis(120));
-        let s = p.process(&sample(10.0, 47.0, -122.0, None));
-        assert!(s.trip_duration >= 0.1, "active segment counted: {}", s.trip_duration);
+        let s = p.process(&sample(10.0, 47.0, -122.0, None), 1);
+        assert!(
+            s.trip_duration >= 0.1,
+            "active segment counted: {}",
+            s.trip_duration
+        );
 
         p.pause_trip();
         let banked = p.trip_duration;
         sleep(Duration::from_millis(250)); // paused — must NOT be counted
         p.resume_trip();
-        let s = p.process(&sample(10.0, 47.001, -122.0, None));
+        let s = p.process(&sample(10.0, 47.001, -122.0, None), 2);
         // Duration ~= banked + a few ms of the new segment, well under banked + the pause gap.
         assert!(
             s.trip_duration < banked + 0.1,

@@ -8,9 +8,9 @@ use std::fs;
 use std::path::Path;
 
 use serde::Serialize;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
-use downloader::{DownloadManager, DownloadProgress};
+use downloader::{has_complete_cache, DownloadManager, DownloadProgress};
 use tilemath::{estimate, BBox, TileEstimate};
 
 /// Bundled region PMTiles, searched under `resources/map/` then app-data `map/`.
@@ -50,12 +50,16 @@ pub fn default_pmtiles_url(app: AppHandle) -> Option<String> {
 }
 
 #[tauri::command]
-pub fn estimate_tile_download(bbox: BBox, min_zoom: u8, max_zoom: u8) -> TileEstimate {
+pub fn estimate_tile_download(
+    bbox: BBox,
+    min_zoom: u8,
+    max_zoom: u8,
+) -> Result<TileEstimate, String> {
     estimate(&bbox, min_zoom, max_zoom)
 }
 
 #[tauri::command]
-pub fn start_tile_download(
+pub async fn start_tile_download(
     app: AppHandle,
     mgr: State<'_, DownloadManager>,
     bbox: BBox,
@@ -64,11 +68,16 @@ pub fn start_tile_download(
 ) -> Result<(), String> {
     let cache_dir = protocol::cache_root(&app).ok_or("no app data dir")?;
     mgr.start(app.clone(), cache_dir, bbox, min_zoom, max_zoom)
+        .await
 }
 
 #[tauri::command]
-pub fn cancel_tile_download(mgr: State<'_, DownloadManager>) {
-    mgr.cancel();
+pub async fn cancel_tile_download(
+    app: AppHandle,
+    mgr: State<'_, DownloadManager>,
+) -> Result<(), String> {
+    let cache_dir = protocol::cache_root(&app).ok_or("no app data dir")?;
+    mgr.cancel(cache_dir).await
 }
 
 #[tauri::command]
@@ -79,25 +88,25 @@ pub fn download_progress(mgr: State<'_, DownloadManager>) -> DownloadProgress {
 #[tauri::command]
 pub fn tiles_exist(app: AppHandle) -> bool {
     protocol::cache_root(&app)
-        .map(|root| {
-            let tiles = root.join("tiles");
-            tiles.is_dir() && dir_has_files(&tiles)
-        })
+        .map(|root| has_complete_cache(&root))
         .unwrap_or(false)
 }
 
 #[tauri::command]
 pub fn cache_size(app: AppHandle) -> u64 {
-    protocol::cache_root(&app).map(|r| dir_size(&r)).unwrap_or(0)
+    protocol::cache_root(&app)
+        .map(|r| dir_size(&r))
+        .unwrap_or(0)
 }
 
 #[tauri::command]
-pub fn delete_cached_tiles(app: AppHandle) -> Result<(), String> {
-    if let Some(root) = protocol::cache_root(&app) {
-        if root.exists() {
-            fs::remove_dir_all(&root).map_err(|e| e.to_string())?;
-        }
-    }
+pub async fn delete_cached_tiles(
+    app: AppHandle,
+    mgr: State<'_, DownloadManager>,
+) -> Result<(), String> {
+    let cache_dir = protocol::cache_root(&app).ok_or("no app data dir")?;
+    mgr.delete(cache_dir).await?;
+    let _ = app.emit("maps:source-changed", ());
     Ok(())
 }
 
@@ -131,21 +140,6 @@ fn pretty_name(id: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join(" ")
-}
-
-fn dir_has_files(p: &Path) -> bool {
-    if let Ok(rd) = fs::read_dir(p) {
-        for entry in rd.flatten() {
-            let path = entry.path();
-            if path.is_file() {
-                return true;
-            }
-            if path.is_dir() && dir_has_files(&path) {
-                return true;
-            }
-        }
-    }
-    false
 }
 
 fn dir_size(p: &Path) -> u64 {

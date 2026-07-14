@@ -15,18 +15,34 @@ const MAX_RETRIES = 5;
 export function useNavigation(): void {
   const rerouteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryCount = useRef(0);
+  const lastActivityAt = useRef(0);
 
   // OSRM router status.
   useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
     nav
       .status()
-      .then((s) => useNavigationStore.getState().setOsrmReady(s.routerRunning))
+      .then((s) => {
+        if (!disposed) {
+          useNavigationStore.getState().setOsrmStatus(s.routerRunning, s.routerError);
+        }
+      })
       .catch(() => {});
-    let unlisten: (() => void) | undefined;
-    onNavStatus((s) => useNavigationStore.getState().setOsrmReady(s.routerRunning))
-      .then((fn) => (unlisten = fn))
+    onNavStatus((s) => {
+      if (!disposed) {
+        useNavigationStore.getState().setOsrmStatus(s.routerRunning, s.routerError);
+      }
+    })
+      .then((fn) => {
+        if (disposed) fn();
+        else unlisten = fn;
+      })
       .catch(() => {});
-    return () => unlisten?.();
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
   }, []);
 
   // Advance the route from each GPS fix while navigating.
@@ -34,6 +50,10 @@ export function useNavigation(): void {
     return useVehicleStore.subscribe((s) => {
       const navState = useNavigationStore.getState();
       if (navState.status !== "navigating" || !s.state) return;
+      if (Date.now() - lastActivityAt.current >= 30_000) {
+        lastActivityAt.current = Date.now();
+        void nav.noteActivity().catch(() => {});
+      }
       const f = s.state.fix;
       navState.updatePosition(
         f.latitude,
@@ -61,6 +81,7 @@ export function useNavigation(): void {
         return;
       }
       const f = veh.fix;
+      const requestGeneration = navState.beginRouteRequest();
       try {
         const route = await nav.calculateRoute(
           f.longitude,
@@ -70,9 +91,17 @@ export function useNavigation(): void {
           f.heading,
           veh.smoothedSpeed
         );
-        useNavigationStore.getState().setRoute(route);
-        retryCount.current = 0;
+        const current = useNavigationStore.getState();
+        if (
+          current.status === "navigating" &&
+          current.isOffRoute &&
+          current.isRouteRequestCurrent(requestGeneration) &&
+          current.applyRouteRequest(requestGeneration, route)
+        ) {
+          retryCount.current = 0;
+        }
       } catch {
+        if (!useNavigationStore.getState().isRouteRequestCurrent(requestGeneration)) return;
         retryCount.current += 1;
         if (retryCount.current <= MAX_RETRIES && useNavigationStore.getState().isOffRoute) {
           rerouteTimer.current = setTimeout(doReroute, 3000 * 2 ** (retryCount.current - 1));
@@ -97,6 +126,10 @@ export function useNavigation(): void {
         scheduleReroute();
       } else {
         clearTimer();
+        retryCount.current = 0;
+        // A route response that started while off-route must not replace the
+        // active route after GPS matching has recovered.
+        s.cancelRouteRequests();
       }
     });
 

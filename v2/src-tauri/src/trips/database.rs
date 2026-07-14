@@ -1,6 +1,8 @@
 //! SQLite trip storage — ported from v1 `trip/database.py` (identical schema).
 
 use std::path::Path;
+#[cfg(test)]
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use rusqlite::{params, Connection};
@@ -67,6 +69,10 @@ pub struct TripInfo {
 #[derive(Clone)]
 pub struct TripStore {
     conn: Arc<Mutex<Connection>>,
+    #[cfg(test)]
+    fail_trackpoint_inserts: Arc<AtomicUsize>,
+    #[cfg(test)]
+    fail_end_trip_updates: Arc<AtomicUsize>,
 }
 
 impl TripStore {
@@ -78,20 +84,39 @@ impl TripStore {
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")
             .map_err(|e| e.to_string())?;
         conn.execute_batch(SCHEMA).map_err(|e| e.to_string())?;
-        Ok(TripStore {
+        let store = TripStore {
             conn: Arc::new(Mutex::new(conn)),
-        })
+            #[cfg(test)]
+            fail_trackpoint_inserts: Arc::new(AtomicUsize::new(0)),
+            #[cfg(test)]
+            fail_end_trip_updates: Arc::new(AtomicUsize::new(0)),
+        };
+        store.reconcile_unfinished_trips(&chrono::Utc::now().to_rfc3339())?;
+        Ok(store)
     }
 
     /// In-memory store for tests.
     #[cfg(test)]
     pub fn open_in_memory() -> Result<Self, String> {
         let conn = Connection::open_in_memory().map_err(|e| e.to_string())?;
-        conn.execute_batch("PRAGMA foreign_keys=ON;").map_err(|e| e.to_string())?;
+        conn.execute_batch("PRAGMA foreign_keys=ON;")
+            .map_err(|e| e.to_string())?;
         conn.execute_batch(SCHEMA).map_err(|e| e.to_string())?;
         Ok(TripStore {
             conn: Arc::new(Mutex::new(conn)),
+            fail_trackpoint_inserts: Arc::new(AtomicUsize::new(0)),
+            fail_end_trip_updates: Arc::new(AtomicUsize::new(0)),
         })
+    }
+
+    #[cfg(test)]
+    pub fn fail_next_trackpoint_inserts(&self, count: usize) {
+        self.fail_trackpoint_inserts.store(count, Ordering::SeqCst);
+    }
+
+    #[cfg(test)]
+    pub fn fail_next_end_trip_updates(&self, count: usize) {
+        self.fail_end_trip_updates.store(count, Ordering::SeqCst);
     }
 
     pub fn create_trip(&self, name: Option<&str>, started_at: &str) -> Result<i64, String> {
@@ -112,18 +137,54 @@ impl TripStore {
         max_speed: f64,
         avg_speed: f64,
     ) -> Result<(), String> {
+        #[cfg(test)]
+        if self
+            .fail_end_trip_updates
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |remaining| {
+                remaining.checked_sub(1)
+            })
+            .is_ok()
+        {
+            return Err("injected trip finalization failure".to_string());
+        }
+        let conn = self.conn.lock().unwrap();
+        let affected = conn
+            .execute(
+                "UPDATE trips SET ended_at=?1, distance_m=?2, max_speed=?3, avg_speed=?4
+                 WHERE id=?5 AND ended_at IS NULL",
+                params![ended_at, distance_m, max_speed, avg_speed, trip_id],
+            )
+            .map_err(|e| e.to_string())?;
+        if affected != 1 {
+            return Err(format!(
+                "trip {trip_id} was not found or was already finalized"
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn reconcile_unfinished_trips(&self, ended_at: &str) -> Result<usize, String> {
         let conn = self.conn.lock().unwrap();
         conn.execute(
-            "UPDATE trips SET ended_at=?1, distance_m=?2, max_speed=?3, avg_speed=?4 WHERE id=?5",
-            params![ended_at, distance_m, max_speed, avg_speed, trip_id],
+            "UPDATE trips SET ended_at=?1 WHERE ended_at IS NULL",
+            params![ended_at],
         )
-        .map_err(|e| e.to_string())?;
-        Ok(())
+        .map_err(|e| e.to_string())
     }
 
     pub fn insert_trackpoints(&self, trip_id: i64, points: &[Trackpoint]) -> Result<(), String> {
         if points.is_empty() {
             return Ok(());
+        }
+        #[cfg(test)]
+        if self
+            .fail_trackpoint_inserts
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |remaining| {
+                remaining.checked_sub(1)
+            })
+            .is_ok()
+        {
+            return Err("injected trackpoint insert failure".to_string());
         }
         let mut conn = self.conn.lock().unwrap();
         let tx = conn.transaction().map_err(|e| e.to_string())?;
@@ -177,7 +238,8 @@ impl TripStore {
                 })
             })
             .map_err(|e| e.to_string())?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
     }
 
     pub fn get_trip(&self, trip_id: i64) -> Result<Option<TripInfo>, String> {
@@ -228,20 +290,28 @@ impl TripStore {
                 })
             })
             .map_err(|e| e.to_string())?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
     }
 
     pub fn delete_trip(&self, trip_id: i64) -> Result<(), String> {
         let conn = self.conn.lock().unwrap();
-        conn.execute("DELETE FROM trips WHERE id=?1", params![trip_id])
+        let affected = conn
+            .execute("DELETE FROM trips WHERE id=?1", params![trip_id])
             .map_err(|e| e.to_string())?;
+        if affected != 1 {
+            return Err(format!("trip {trip_id} was not found"));
+        }
         Ok(())
     }
 
     pub fn rename_trip(&self, trip_id: i64, name: &str) -> Result<(), String> {
         let conn = self.conn.lock().unwrap();
-        conn.execute("UPDATE trips SET name=?1 WHERE id=?2", params![name, trip_id])
-            .map_err(|e| e.to_string())?;
+        conn.execute(
+            "UPDATE trips SET name=?1 WHERE id=?2",
+            params![name, trip_id],
+        )
+        .map_err(|e| e.to_string())?;
         Ok(())
     }
 }

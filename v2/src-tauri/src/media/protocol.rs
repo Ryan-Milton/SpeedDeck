@@ -7,7 +7,10 @@ use tauri::http::{Request, Response, StatusCode};
 use tauri::{AppHandle, Manager};
 
 pub fn art_root(app: &AppHandle) -> Option<PathBuf> {
-    app.path().app_data_dir().ok().map(|d| d.join("music-cache/art"))
+    app.path()
+        .app_data_dir()
+        .ok()
+        .map(|d| d.join("music-cache/art"))
 }
 
 pub fn handle_album_art(app: &AppHandle, req: &Request<Vec<u8>>) -> Response<Vec<u8>> {

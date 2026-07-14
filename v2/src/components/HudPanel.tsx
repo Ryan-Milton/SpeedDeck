@@ -1,4 +1,5 @@
-import type { CSSProperties, MouseEventHandler, ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import { pressableProps } from "./interactive";
 
 /** A surface panel with optional cyan corner brackets and active glow. */
 export function HudPanel({
@@ -7,20 +8,25 @@ export function HudPanel({
   className,
   style,
   onClick,
+  ariaLabel,
   children,
 }: {
   active?: boolean;
   brackets?: boolean;
   className?: string;
   style?: CSSProperties;
-  onClick?: MouseEventHandler<HTMLDivElement>;
+  onClick?: () => void;
+  ariaLabel?: string;
   children: ReactNode;
 }) {
   return (
     <div
-      className={["hud-panel", active ? "active" : "", className].filter(Boolean).join(" ")}
+      className={["hud-panel", active ? "active" : "", onClick ? "tappable" : "", className]
+        .filter(Boolean)
+        .join(" ")}
       style={style}
-      onClick={onClick}
+      aria-label={ariaLabel}
+      {...pressableProps(onClick)}
     >
       {children}
       {brackets && (

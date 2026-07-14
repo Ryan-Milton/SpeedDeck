@@ -12,10 +12,12 @@
   --surface-2: #161b23;
   --surface-3: #1e242e;
 
-  /* Text */
+  /* Text. muted/dim are tuned to hold ≥4.5:1 on the lightest surface
+     (--surface-3) — hud-labels and subcopy render on panels, not just --bg. */
   --text: #eaf2f2;
-  --text-muted: #7e8a93;
-  --text-dim: #4c565e;
+  --text-muted: #98a4ad;
+  --text-dim: #838f98;
+  --text-on-accent: #04201d;
 
   /* Phosphor cyan accent */
   --accent: #2bd9cc;
@@ -23,11 +25,16 @@
   --accent-glow: rgba(43, 217, 204, 0.45);
   --accent-soft: rgba(43, 217, 204, 0.12);
 
-  /* Functional HUD warning palette */
+  /* Functional HUD warning palette (each tone: text color + soft bg + border) */
   --ok: #34e39b;
+  --ok-soft: rgba(52, 227, 155, 0.12);
+  --ok-border: rgba(52, 227, 155, 0.4);
   --caution: #ffb020;
+  --caution-soft: rgba(255, 176, 32, 0.12);
+  --caution-border: rgba(255, 176, 32, 0.4);
   --alert: #ff4d4f;
   --alert-soft: rgba(255, 77, 79, 0.16);
+  --alert-border: rgba(255, 77, 79, 0.4);
 
   /* HUD chrome lines / glass */
   --hud-line: rgba(43, 217, 204, 0.5);
@@ -70,6 +77,15 @@
   /* ---- Elevation / glow ---- */
   --glow-accent: 0 0 0 1.5px var(--accent), 0 0 18px var(--accent-glow);
   --shadow-panel: 0 12px 40px rgba(0, 0, 0, 0.55);
+  --shadow-tile: 0 6px 16px rgba(0, 0, 0, 0.45);
+
+  /* ---- Controls ---- */
+  --control-h: 48px;
+  --control-h-sm: 44px; /* touch-target floor — nothing tappable below this */
+  --press-scale: 0.94;
+
+  /* ---- Layout ---- */
+  --dock-clearance: 104px; /* room for the floating dock at screen bottom */
 
   /* ---- Z-index scale ---- */
   --z-fab: 10;
@@ -82,10 +98,6 @@
   --dur-fast: 120ms;
   --dur-med: 240ms;
   --dur-slow: 480ms;
-
-  /* legacy aliases (kept until all screens migrate) */
-  --radius: var(--radius-lg);
-  --font: var(--font-body);
 }
 
 * {
@@ -110,15 +122,28 @@ body {
   font-size: var(--text-md);
   overflow: hidden;
   overscroll-behavior: none;
-  /* Ambient game-HUD texture: a faint cyan grid + a soft top vignette. */
-  background-image: linear-gradient(
-      var(--hud-line-idle) 1px,
-      transparent 1px
-    ),
-    linear-gradient(90deg, var(--hud-line-idle) 1px, transparent 1px),
-    radial-gradient(120% 80% at 50% -10%, #10161f 0%, var(--bg) 60%);
-  background-size: 40px 40px, 40px 40px, 100% 100%;
-  background-position: center, center, center;
+  /* Soft top vignette only — the old ambient grid competed with text. */
+  background-image: radial-gradient(120% 80% at 50% -10%, #10161f 0%, var(--bg) 60%);
+}
+
+/* Thin HUD scrollbars instead of the OS default on every scroll region. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--surface-3);
+  border-radius: var(--radius-pill);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:active {
+  background: var(--text-dim);
+  border: 3px solid transparent;
+  background-clip: padding-box;
 }
 
 /* Numerals and display type share these helpers. */
@@ -161,6 +186,43 @@ body {
 
 .boot-in {
   animation: hud-boot-in var(--dur-slow) var(--ease-hud) both;
+}
+
+/* One-shot power-on overlay (App.tsx unmounts it after ~1.2s). */
+.boot-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-boot);
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  animation: boot-out var(--dur-med) var(--ease-hud) 950ms both;
+}
+@keyframes boot-out {
+  to {
+    opacity: 0;
+  }
+}
+.boot-frame {
+  position: absolute;
+  width: min(52vw, 640px);
+  filter: drop-shadow(0 0 12px var(--accent-glow));
+}
+.boot-sweep {
+  --sweep-len: 1000;
+  stroke-dasharray: 1000;
+  stroke-dashoffset: 0;
+  animation: hud-sweep 750ms var(--ease-hud) both;
+}
+.boot-wordmark {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  letter-spacing: 0.4em;
+  text-indent: 0.4em; /* visually re-center the tracked text */
+  color: var(--text);
+  text-shadow: 0 0 18px var(--accent-glow);
+  animation-delay: 220ms;
 }
 
 @media (prefers-reduced-motion: reduce) {

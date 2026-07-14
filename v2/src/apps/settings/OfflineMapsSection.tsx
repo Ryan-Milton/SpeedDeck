@@ -5,7 +5,16 @@ import {
   type RegionInfo,
   type DownloadProgress,
 } from "../../lib/tiles";
-import { HudPanel, SectionHeader, SettingsRow, ListRow, Badge, Button } from "../../components";
+import { toastError } from "../../stores/ui-store";
+import {
+  HudPanel,
+  SectionHeader,
+  SettingsRow,
+  ListRow,
+  Badge,
+  Button,
+  ConfirmDialog,
+} from "../../components";
 
 function fmtBytes(n: number): string {
   if (n <= 0) return "0 MB";
@@ -19,6 +28,7 @@ export default function OfflineMapsSection() {
   const [regions, setRegions] = useState<RegionInfo[]>([]);
   const [cacheBytes, setCacheBytes] = useState(0);
   const [progress, setProgress] = useState<DownloadProgress | null>(null);
+  const [confirmClear, setConfirmClear] = useState(false);
 
   async function refresh() {
     try {
@@ -42,11 +52,12 @@ export default function OfflineMapsSection() {
   }, []);
 
   async function clearCache() {
+    setConfirmClear(false);
     try {
       await tiles.deleteCache();
       refresh();
     } catch {
-      /* ignore */
+      toastError("Couldn't clear the tile cache.");
     }
   }
 
@@ -89,9 +100,20 @@ export default function OfflineMapsSection() {
         )}
 
         <div className="settings-actions">
-          <Button onClick={clearCache}>Clear tile cache</Button>
+          <Button onClick={() => setConfirmClear(true)}>Clear tile cache</Button>
         </div>
       </HudPanel>
+
+      {confirmClear && (
+        <ConfirmDialog
+          title="Clear the tile cache?"
+          body={`Frees ${fmtBytes(cacheBytes)} of cached map tiles. Areas you've visited will re-download as you drive.`}
+          confirmLabel="Clear cache"
+          danger
+          onConfirm={clearCache}
+          onCancel={() => setConfirmClear(false)}
+        />
+      )}
     </>
   );
 }

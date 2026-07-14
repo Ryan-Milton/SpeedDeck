@@ -13,32 +13,57 @@
   pointer-events: none;
   transition: border-color var(--dur-med) var(--ease-hud);
 }
+/* Each bracket's outer corner matches the panel radius so brackets hug a
+   rounded border instead of poking square past it. */
 .hud-corner.tl {
   top: 0;
   left: 0;
   border-right: 0;
   border-bottom: 0;
+  border-top-left-radius: var(--radius-lg);
 }
 .hud-corner.tr {
   top: 0;
   right: 0;
   border-left: 0;
   border-bottom: 0;
+  border-top-right-radius: var(--radius-lg);
 }
 .hud-corner.bl {
   bottom: 0;
   left: 0;
   border-right: 0;
   border-top: 0;
+  border-bottom-left-radius: var(--radius-lg);
 }
 .hud-corner.br {
   bottom: 0;
   right: 0;
   border-left: 0;
   border-top: 0;
+  border-bottom-right-radius: var(--radius-lg);
 }
 .active > .hud-corner {
   border-color: var(--hud-line);
+}
+
+/* Inside a bordered panel, absolute positioning starts inside the border —
+   pull brackets out 1px so they sit ON the border instead of doubling it. */
+.hud-panel > .hud-corner.tl {
+  top: -1px;
+  left: -1px;
+}
+.hud-panel > .hud-corner.tr {
+  top: -1px;
+  right: -1px;
+}
+.hud-panel > .hud-corner.bl {
+  bottom: -1px;
+  left: -1px;
+}
+.hud-panel > .hud-corner.br {
+  bottom: -1px;
+  right: -1px;
 }
 
 .hud-panel {
@@ -63,7 +88,7 @@
   background: var(--surface-2);
   border: 1px solid transparent;
   border-radius: var(--radius-md);
-  min-height: 48px;
+  min-height: var(--control-h);
   padding: 0 var(--space-5);
   display: inline-flex;
   align-items: center;
@@ -74,7 +99,7 @@
     background var(--dur-fast) var(--ease-hud);
 }
 .btn:active {
-  transform: scale(0.96);
+  transform: scale(var(--press-scale));
 }
 .btn:focus-visible {
   outline: none;
@@ -82,7 +107,7 @@
 }
 .btn.primary {
   background: var(--accent);
-  color: #04201d;
+  color: var(--text-on-accent);
 }
 .btn.primary:active {
   background: var(--accent-press);
@@ -90,14 +115,14 @@
 .btn.danger {
   background: var(--alert-soft);
   color: var(--alert);
-  border-color: rgba(255, 77, 79, 0.4);
+  border-color: var(--alert-border);
 }
 .btn.ghost {
   background: transparent;
   color: var(--accent);
 }
 .btn.sm {
-  min-height: 38px;
+  min-height: var(--control-h-sm);
   font-size: var(--text-xs);
   padding: 0 var(--space-3);
 }
@@ -121,7 +146,7 @@
     background var(--dur-fast) var(--ease-hud);
 }
 .icon-btn:active {
-  transform: scale(0.92);
+  transform: scale(var(--press-scale));
 }
 .icon-btn:focus-visible {
   outline: none;
@@ -190,6 +215,17 @@
 .hud-slider:focus-visible::-webkit-slider-thumb {
   box-shadow: var(--glow-accent);
 }
+/* Focus must be visible beyond the 16px thumb — light the track too. */
+.hud-slider:focus-visible::-webkit-slider-runnable-track {
+  box-shadow: 0 0 0 1px var(--accent), 0 0 12px var(--accent-glow);
+}
+.hud-slider:focus-visible::-moz-range-track {
+  box-shadow: 0 0 0 1px var(--accent), 0 0 12px var(--accent-glow);
+}
+.hud-slider:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
 
 /* ---------------- Card ---------------- */
 .hud-card {
@@ -197,6 +233,24 @@
   border: 1px solid var(--hud-line-idle);
   border-radius: var(--radius-lg);
   padding: var(--space-5);
+}
+
+/* Clickable Card / HudPanel: focus ring + touch-visible press feedback. */
+.hud-card.tappable,
+.hud-panel.tappable {
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-hud),
+    border-color var(--dur-fast) var(--ease-hud);
+}
+.hud-card.tappable:focus-visible,
+.hud-panel.tappable:focus-visible {
+  outline: none;
+  box-shadow: var(--glow-accent);
+}
+.hud-card.tappable:active,
+.hud-panel.tappable:active {
+  background: var(--surface-2);
+  border-color: var(--hud-line);
 }
 
 /* ---------------- ListRow / SettingsRow ---------------- */
@@ -215,6 +269,9 @@
 }
 .list-row.tappable:hover {
   background: var(--surface-2);
+}
+.list-row.tappable:active {
+  background: var(--surface-3);
 }
 .list-row.tappable:focus-visible {
   outline: none;
@@ -257,12 +314,12 @@
 }
 .badge.ok {
   color: var(--ok);
-  border-color: rgba(52, 227, 155, 0.4);
-  background: rgba(52, 227, 155, 0.12);
+  border-color: var(--ok-border);
+  background: var(--ok-soft);
 }
 .badge.alert {
   color: var(--alert);
-  border-color: rgba(255, 77, 79, 0.4);
+  border-color: var(--alert-border);
   background: var(--alert-soft);
 }
 
@@ -307,12 +364,12 @@
   border: none;
   border-radius: var(--radius-sm);
   padding: 10px 18px;
-  min-height: 40px;
+  min-height: var(--control-h-sm);
   cursor: pointer;
   transition: color var(--dur-fast), background var(--dur-fast);
 }
 .hud-tabs .tab.active {
-  color: #04201d;
+  color: var(--text-on-accent);
   background: var(--accent);
 }
 .hud-tabs .tab:focus-visible {
@@ -417,25 +474,30 @@
   position: relative;
   display: grid;
   place-items: center;
+  color: var(--accent); /* glyphs inherit the phosphor accent */
+  border: 1px solid var(--hud-line-idle);
   border-radius: var(--radius-lg);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-tile);
   transition: transform var(--dur-fast) var(--ease-hud),
     box-shadow var(--dur-med) var(--ease-hud);
 }
+.app-tile.disabled .tile-glyph {
+  color: var(--text-dim);
+}
 .app-tile:active .tile-glyph {
-  transform: scale(0.93);
+  transform: scale(var(--press-scale));
 }
 .app-tile.focused .tile-glyph {
-  box-shadow: var(--glow-accent), 0 6px 16px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--glow-accent), var(--shadow-tile);
 }
 .app-tile.current .tile-glyph {
-  box-shadow: 0 0 0 2px var(--accent), 0 0 18px var(--accent-glow);
+  box-shadow: var(--glow-accent), var(--shadow-tile);
 }
 .app-tile:focus-visible {
   outline: none;
 }
 .app-tile:focus-visible .tile-glyph {
-  box-shadow: var(--glow-accent), 0 6px 16px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--glow-accent), var(--shadow-tile);
 }
 .app-tile.disabled {
   opacity: 0.35;
@@ -451,4 +513,154 @@
 }
 .app-tile.current .tile-label {
   color: var(--accent);
+}
+
+/* ---------------- Dialog ---------------- */
+.dialog-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: grid;
+  place-items: center;
+  background: rgba(3, 6, 10, 0.6);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  animation: hud-fade-in var(--dur-fast) var(--ease-hud);
+}
+.hud-dialog {
+  width: min(480px, 88%);
+  background: var(--surface);
+  border: 1px solid var(--hud-line);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-panel);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.dialog-title {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+.dialog-body {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+.dialog-input {
+  -webkit-user-select: text;
+  user-select: text;
+  min-height: var(--control-h);
+  padding: 0 var(--space-4);
+  font-family: var(--font-body);
+  font-size: var(--text-md);
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--hud-line-idle);
+  border-radius: var(--radius-md);
+}
+.dialog-input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+/* ---------------- Toast ---------------- */
+.toast-host {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--dock-clearance) + var(--space-3));
+  transform: translateX(-50%);
+  z-index: var(--z-overlay);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text);
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--hud-line-idle);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-5);
+  min-height: var(--control-h-sm);
+  box-shadow: var(--shadow-panel);
+  cursor: pointer;
+  animation: hud-boot-in var(--dur-med) var(--ease-hud);
+}
+.toast.error {
+  color: var(--alert);
+  border-color: var(--alert-border);
+}
+.toast.ok {
+  color: var(--ok);
+  border-color: var(--ok-border);
+}
+
+/* ---------------- Spinner ---------------- */
+.hud-spinner {
+  display: inline-block;
+  border-radius: 50%;
+  border: 2px solid var(--accent-soft);
+  border-top-color: var(--accent);
+  animation: hud-spin 800ms linear infinite;
+}
+@keyframes hud-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------------- AlbumArt ---------------- */
+.album-art {
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--hud-line-idle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.album-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.album-art-fallback {
+  font-size: 28px;
+  color: var(--text-dim);
+}
+
+/* ---------------- AppHeader ---------------- */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.app-header-trailing {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* ---------------- Utilities ---------------- */
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

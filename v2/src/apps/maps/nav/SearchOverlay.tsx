@@ -12,37 +12,49 @@ export default function SearchOverlay() {
   const setOpen = useNavigationStore((s) => s.setSearchOpen);
   const setResults = useNavigationStore((s) => s.setSearchResults);
   const setDestination = useNavigationStore((s) => s.setDestination);
-  const setRoute = useNavigationStore((s) => s.setRoute);
   const setCalculating = useNavigationStore((s) => s.setIsCalculating);
+  const beginRouteRequest = useNavigationStore((s) => s.beginRouteRequest);
+  const isRouteRequestCurrent = useNavigationStore((s) => s.isRouteRequestCurrent);
+  const applyRouteRequest = useNavigationStore((s) => s.applyRouteRequest);
+  const finishRouteRequest = useNavigationStore((s) => s.finishRouteRequest);
+  const cancelRouteRequests = useNavigationStore((s) => s.cancelRouteRequests);
   const unit = useSettingsStore((s) => s.speedUnit);
 
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchGeneration = useRef(0);
 
   useEffect(() => {
-    if (!isOpen) setQuery("");
+    if (!isOpen) {
+      searchGeneration.current += 1;
+      setQuery("");
+    }
   }, [isOpen]);
 
   useEffect(() => {
+    const generation = ++searchGeneration.current;
     if (debounce.current) clearTimeout(debounce.current);
-    if (query.trim().length < 2) {
+    if (!isOpen || query.trim().length < 2) {
       setResults([]);
       return;
     }
     debounce.current = setTimeout(async () => {
       const fix = useVehicleStore.getState().state?.fix;
       try {
-        setResults(await nav.geocode(query.trim(), fix?.latitude, fix?.longitude));
-        setError(null);
+        const results = await nav.geocode(query.trim(), fix?.latitude, fix?.longitude);
+        if (searchGeneration.current === generation) {
+          setResults(results);
+          setError(null);
+        }
       } catch (e) {
-        setError(String(e));
+        if (searchGeneration.current === generation) setError(String(e));
       }
     }, 250);
     return () => {
       if (debounce.current) clearTimeout(debounce.current);
     };
-  }, [query, setResults]);
+  }, [isOpen, query, setResults]);
 
   if (!isOpen) return null;
 
@@ -53,16 +65,22 @@ export default function SearchOverlay() {
       return;
     }
     setDestination({ name, category, latitude: lat, longitude: lon, importance });
-    setOpen(false);
+    searchGeneration.current += 1;
+    const generation = beginRouteRequest();
     setCalculating(true);
     try {
       const route = await nav.calculateRoute(fix.longitude, fix.latitude, lon, lat);
-      setRoute(route);
+      if (applyRouteRequest(generation, route)) setOpen(false);
     } catch (e) {
-      setError(String(e));
+      if (isRouteRequestCurrent(generation)) setError(String(e));
     } finally {
-      setCalculating(false);
+      finishRouteRequest(generation);
     }
+  }
+
+  function cancel() {
+    cancelRouteRequests();
+    setOpen(false);
   }
 
   return (
@@ -75,7 +93,7 @@ export default function SearchOverlay() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        <button className="search-close" onClick={() => setOpen(false)}>
+        <button className="search-close" onClick={cancel}>
           Cancel
         </button>
       </div>

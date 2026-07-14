@@ -6,16 +6,10 @@
   overflow: hidden;
 }
 
+/* HudPanel base supplies chrome; the pane itself is full-bleed for the map. */
 .dash-map {
-  position: relative;
-  border-radius: var(--radius-lg);
+  padding: 0;
   overflow: hidden;
-  background: var(--surface);
-  border: 1px solid var(--hud-line-idle);
-  cursor: pointer;
-}
-.dash-map.active {
-  border-color: var(--hud-line);
 }
 .dash-map-label {
   position: absolute;
@@ -24,7 +18,7 @@
   z-index: 1;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
 }
-/* LiveMap fills the pane via its own position:absolute inset:0. */
+/* The shared map host fills the pane; LiveMap moves its owned container here. */
 
 .dash-aside {
   display: grid;
@@ -46,24 +40,8 @@
   gap: 14px 16px;
   align-items: center;
 }
-.np-card-art {
+.np-card .album-art {
   grid-row: 1 / 3;
-  width: 88px;
-  height: 88px;
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  background: var(--surface-2);
-  display: grid;
-  place-items: center;
-}
-.np-card-art img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.np-card-fallback {
-  font-size: 36px;
-  color: var(--text-muted);
 }
 .np-card-meta {
   display: flex;
@@ -86,25 +64,6 @@
   grid-column: 2;
   display: flex;
   gap: var(--space-2);
-}
-.np-card-controls button {
-  background: var(--surface-2);
-  color: var(--text);
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  width: 50px;
-  height: 50px;
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  transition: transform var(--dur-fast) var(--ease-hud);
-}
-.np-card-controls button:active {
-  transform: scale(0.92);
-}
-.np-card-controls button:focus-visible {
-  outline: none;
-  box-shadow: var(--glow-accent);
 }
 
 /* Glance card */
@@ -144,4 +103,11 @@
 .glance-eta {
   margin-top: var(--space-4);
   font-size: var(--text-sm);
+}
+
+/* Session telemetry strip under the gauge. */
+.glance-stats {
+  display: flex;
+  gap: var(--space-8);
+  margin-top: var(--space-4);
 }

@@ -53,6 +53,16 @@
   flex-direction: column;
   gap: 6px;
   text-align: left;
+  transition: transform var(--dur-fast) var(--ease-hud);
+}
+.album-tile:active {
+  transform: scale(var(--press-scale));
+}
+.album-tile:focus-visible {
+  outline: none;
+}
+.album-tile:focus-visible .album-art {
+  box-shadow: var(--glow-accent);
 }
 .album-name {
   font-family: var(--font-display);
@@ -64,23 +74,7 @@
   font-size: var(--text-xs);
 }
 
-.album-art {
-  border-radius: 12px;
-  overflow: hidden;
-  background: var(--surface-2);
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-}
-.album-art img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.album-art-fallback {
-  font-size: 40px;
-  color: var(--text-muted);
-}
+/* Base .album-art lives in components.css; only the hero size is local. */
 .album-art-fallback.big {
   font-size: 120px;
 }
@@ -100,22 +94,16 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  list-style: none;
   display: flex;
   flex-direction: column;
 }
-.track-row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 12px;
+/* Rows are shared ListRows; locally they just gain dividers. */
+.track-list .track-row {
   border-bottom: 1px solid var(--hud-line-idle);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: background var(--dur-fast) var(--ease-hud);
+  border-radius: 0;
 }
-.track-row:hover {
-  background: var(--surface-2);
+.track-list .track-row:last-child {
+  border-bottom: none;
 }
 .track-empty {
   padding: 16px 8px;
