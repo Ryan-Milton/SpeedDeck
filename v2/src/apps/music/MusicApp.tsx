@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  music,
-  albumArtUrl,
-  type AlbumInfo,
-  type TrackInfo,
-} from "../../lib/music";
+import { music, type AlbumInfo, type TrackInfo } from "../../lib/music";
 import { prettyTitle } from "../../lib/track-name";
+import { formatDuration } from "../../lib/format";
 import { useMusicStore } from "../../stores/music-store";
-import { Tabs, EmptyState, Button } from "../../components";
+import { useShellStore } from "../../stores/shell-store";
+import { toastError } from "../../stores/ui-store";
+import { Tabs, EmptyState, Button, ListRow, AlbumArt } from "../../components";
 import { MusicIcon } from "../icons";
 import "./music.css";
 
@@ -19,18 +17,27 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "songs", label: "Songs" },
 ];
 
-function fmtDur(ms: number | null): string {
-  if (!ms) return "";
-  const s = Math.round(ms / 1000);
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-}
-
-function AlbumArt({ artKey, size }: { artKey: string | null; size: number }) {
-  const url = albumArtUrl(artKey);
+// Zero state for a browse tab. The copy must be honest: "no folder yet"
+// (with a next step) is a different situation from "folder scanned, empty".
+function LibraryEmpty({ hasFolders, noun }: { hasFolders: boolean; noun: string }) {
+  const openApp = useShellStore((s) => s.openApp);
+  if (!hasFolders) {
+    return (
+      <EmptyState
+        icon={<MusicIcon size={40} />}
+        title="No music yet"
+        sub="Add a music folder in Settings to build your library."
+        action={<Button onClick={() => openApp("settings")}>Open Settings</Button>}
+      />
+    );
+  }
   return (
-    <div className="album-art" style={{ width: size, height: size }}>
-      {url ? <img src={url} alt="" /> : <span className="album-art-fallback">♪</span>}
-    </div>
+    <EmptyState
+      icon={<MusicIcon size={40} />}
+      title={`No ${noun} found`}
+      sub="Your folders scanned clean but no playable tracks turned up. Try Rescan in Settings."
+      action={<Button onClick={() => openApp("settings")}>Open Settings</Button>}
+    />
   );
 }
 
@@ -45,12 +52,18 @@ export default function MusicApp() {
   const [openAlbum, setOpenAlbum] = useState<AlbumInfo | null>(null);
   const [albumTracks, setAlbumTracks] = useState<TrackInfo[]>([]);
   const [artistFilter, setArtistFilter] = useState<string | null>(null);
+  const [hasFolders, setHasFolders] = useState(true);
   const libraryVersion = useMusicStore((s) => s.libraryVersion);
 
   useEffect(() => {
-    music.albums().then(setAlbums).catch(() => {});
-    music.artists().then(setArtists).catch(() => {});
-    music.tracks().then(setSongs).catch(() => {});
+    Promise.all([music.albums(), music.artists(), music.tracks(), music.folders()])
+      .then(([a, ar, t, f]) => {
+        setAlbums(a);
+        setArtists(ar);
+        setSongs(t);
+        setHasFolders(f.length > 0);
+      })
+      .catch(() => toastError("Couldn't load the music library."));
   }, [libraryVersion]);
 
   useEffect(() => {
@@ -60,7 +73,7 @@ export default function MusicApp() {
       return;
     }
     const id = setTimeout(() => {
-      music.search(q).then(setResults).catch(() => {});
+      music.search(q).then(setResults).catch(() => toastError("Search failed."));
     }, 200);
     return () => clearTimeout(id);
   }, [query]);
@@ -72,8 +85,15 @@ export default function MusicApp() {
 
   async function openAlbumDetail(a: AlbumInfo) {
     setOpenAlbum(a);
-    setAlbumTracks(await music.tracksByAlbum(a.album, a.artist).catch(() => []));
+    setAlbumTracks(
+      await music.tracksByAlbum(a.album, a.artist).catch(() => {
+        toastError("Couldn't load album tracks.");
+        return [];
+      })
+    );
   }
+
+  const play = (p: Promise<unknown>) => p.catch(() => toastError("Playback failed."));
 
   if (openAlbum) {
     return (
@@ -89,19 +109,19 @@ export default function MusicApp() {
             <p className="muted">{openAlbum.artist}</p>
           </div>
         </div>
-        <ul className="track-list">
+        <div className="track-list">
           {albumTracks.map((t, i) => (
-            <li
+            <ListRow
               key={t.id}
               className="track-row"
-              onClick={() => music.playAlbum(openAlbum.album, openAlbum.artist, i).catch(() => {})}
+              onClick={() => play(music.playAlbum(openAlbum.album, openAlbum.artist, i))}
             >
               <span className="track-no">{t.trackNo ?? i + 1}</span>
-              <span className="track-title">{prettyTitle(t)}</span>
-              <span className="track-dur">{fmtDur(t.durationMs)}</span>
-            </li>
+              <span className="track-title truncate">{prettyTitle(t)}</span>
+              <span className="track-dur">{formatDuration(t.durationMs)}</span>
+            </ListRow>
           ))}
-        </ul>
+        </div>
       </div>
     );
   }
@@ -132,22 +152,29 @@ export default function MusicApp() {
         results.length === 0 ? (
           <EmptyState title="No matches" sub={`Nothing found for “${query.trim()}”.`} />
         ) : (
-          <ul className="track-list">
+          <div className="track-list">
             {results.map((t) => (
-              <li key={t.id} className="track-row" onClick={() => music.playTrack(t.id).catch(() => {})}>
-                <span className="track-title">{prettyTitle(t)}</span>
+              <ListRow key={t.id} className="track-row" onClick={() => play(music.playTrack(t.id))}>
+                <span className="track-title truncate">{prettyTitle(t)}</span>
                 <span className="track-sub muted">{t.artist ?? ""}</span>
-              </li>
+              </ListRow>
             ))}
-          </ul>
+          </div>
         )
       ) : tab === "albums" ? (
         shownAlbums.length === 0 ? (
-          <EmptyState
-            icon={<MusicIcon size={40} />}
-            title="No music yet"
-            sub="Add a music folder in Settings to build your library."
-          />
+          artistFilter ? (
+            <EmptyState
+              icon={<MusicIcon size={40} />}
+              title="No albums found"
+              sub={`Nothing in the library by ${artistFilter}.`}
+              action={
+                <Button onClick={() => setArtistFilter(null)}>Show all albums</Button>
+              }
+            />
+          ) : (
+            <LibraryEmpty hasFolders={hasFolders} noun="albums" />
+          )
         ) : (
           <div className="album-grid">
             {shownAlbums.map((a) => (
@@ -157,16 +184,19 @@ export default function MusicApp() {
                 onClick={() => openAlbumDetail(a)}
               >
                 <AlbumArt artKey={a.artKey} size={150} />
-                <span className="album-name">{a.album}</span>
-                <span className="album-artist muted">{a.artist}</span>
+                <span className="album-name truncate">{a.album}</span>
+                <span className="album-artist muted truncate">{a.artist}</span>
               </button>
             ))}
           </div>
         )
       ) : tab === "artists" ? (
-        <ul className="track-list">
+        artists.length === 0 ? (
+          <LibraryEmpty hasFolders={hasFolders} noun="artists" />
+        ) : (
+        <div className="track-list">
           {artists.map((a) => (
-            <li
+            <ListRow
               key={a}
               className="track-row"
               onClick={() => {
@@ -174,22 +204,25 @@ export default function MusicApp() {
                 setTab("albums");
               }}
             >
-              <span className="track-title">{a}</span>
-            </li>
+              <span className="track-title truncate">{a}</span>
+            </ListRow>
           ))}
-        </ul>
+        </div>
+        )
+      ) : songs.length === 0 ? (
+        <LibraryEmpty hasFolders={hasFolders} noun="songs" />
       ) : (
-        <ul className="track-list">
+        <div className="track-list">
           {songs.map((t) => (
-            <li key={t.id} className="track-row" onClick={() => music.playTrack(t.id).catch(() => {})}>
-              <span className="track-title">{prettyTitle(t)}</span>
-              <span className="track-sub muted">
+            <ListRow key={t.id} className="track-row" onClick={() => play(music.playTrack(t.id))}>
+              <span className="track-title truncate">{prettyTitle(t)}</span>
+              <span className="track-sub muted truncate">
                 {t.artist ?? ""} {t.album ? `· ${t.album}` : ""}
               </span>
-              <span className="track-dur">{fmtDur(t.durationMs)}</span>
-            </li>
+              <span className="track-dur">{formatDuration(t.durationMs)}</span>
+            </ListRow>
           ))}
-        </ul>
+        </div>
       )}
     </div>
   );

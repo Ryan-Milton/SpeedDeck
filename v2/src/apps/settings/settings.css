@@ -43,3 +43,15 @@
   box-shadow: 0 0 8px var(--accent-glow);
   transition: width 0.2s ease;
 }
+.dl-fill.indeterminate {
+  width: 40%;
+  animation: dl-slide 1.2s var(--ease-hud) infinite;
+}
+@keyframes dl-slide {
+  from {
+    margin-left: -40%;
+  }
+  to {
+    margin-left: 100%;
+  }
+}

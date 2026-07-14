@@ -185,7 +185,7 @@ impl LibraryStore {
     pub fn tracks_by_album(&self, album: &str, artist: &str) -> Result<Vec<TrackInfo>, String> {
         self.query_tracks(
             &format!(
-                "{SELECT_TRACK} WHERE album=?1 AND COALESCE(album_artist, artist)=?2 \
+                "{SELECT_TRACK} WHERE {ALBUM_EXPR}=?1 AND {ARTIST_EXPR}=?2 \
                  ORDER BY disc_no, track_no"
             ),
             params![album, artist],
@@ -212,12 +212,11 @@ impl LibraryStore {
     pub fn albums(&self) -> Result<Vec<AlbumInfo>, String> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn
-            .prepare(
-                "SELECT album, COALESCE(album_artist, artist) AS aa, \
+            .prepare(&format!(
+                "SELECT {ALBUM_EXPR} AS alb, {ARTIST_EXPR} AS aa, \
                  MAX(art_key), COUNT(*), MAX(year) \
-                 FROM tracks WHERE album IS NOT NULL AND album <> '' \
-                 GROUP BY album, aa ORDER BY aa, album",
-            )
+                 FROM tracks GROUP BY alb, aa ORDER BY aa, alb"
+            ))
             .map_err(|e| e.to_string())?;
         let rows = stmt
             .query_map([], |r| {
@@ -236,10 +235,9 @@ impl LibraryStore {
     pub fn artists(&self) -> Result<Vec<String>, String> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn
-            .prepare(
-                "SELECT DISTINCT COALESCE(album_artist, artist) AS aa FROM tracks \
-                 WHERE aa IS NOT NULL AND aa <> '' ORDER BY aa",
-            )
+            .prepare(&format!(
+                "SELECT DISTINCT {ARTIST_EXPR} AS aa FROM tracks ORDER BY aa"
+            ))
             .map_err(|e| e.to_string())?;
         let rows = stmt
             .query_map([], |r| r.get::<_, String>(0))
@@ -266,6 +264,12 @@ impl LibraryStore {
 
 const SELECT_TRACK: &str =
     "SELECT id,path,title,artist,album,album_artist,track_no,disc_no,duration_ms,genre,year,art_key FROM tracks";
+
+// Untagged files must still land in a browsable bucket, so every query that
+// groups or filters by album/artist goes through these exact expressions —
+// grouping and detail lookups must agree or bucket taps return nothing.
+const ALBUM_EXPR: &str = "COALESCE(NULLIF(album,''), 'Unknown Album')";
+const ARTIST_EXPR: &str = "COALESCE(NULLIF(album_artist,''), NULLIF(artist,''), 'Unknown Artist')";
 
 fn map_track(r: &rusqlite::Row<'_>) -> rusqlite::Result<TrackInfo> {
     Ok(TrackInfo {
@@ -328,6 +332,41 @@ mod tests {
         let disc = s.tracks_by_album("Discovery", "Daft Punk").unwrap();
         assert_eq!(disc.len(), 2);
         assert_eq!(disc[0].track_no, Some(1));
+    }
+
+    #[test]
+    fn untagged_tracks_land_in_unknown_buckets() {
+        let s = LibraryStore::open_in_memory().unwrap();
+        s.replace_tracks(&[
+            meta("/m/a1.mp3", "Daft Punk", "Discovery", "One More Time", 1),
+            // No album/artist tags at all — must still be browsable.
+            TrackMeta { path: "/m/untagged.mp3".into(), ..Default::default() },
+            // Empty-string tags must behave like missing ones.
+            TrackMeta {
+                path: "/m/empty-tags.mp3".into(),
+                title: Some("Empty Tags".into()),
+                artist: Some("".into()),
+                album: Some("".into()),
+                ..Default::default()
+            },
+        ])
+        .unwrap();
+
+        let albums = s.albums().unwrap();
+        assert_eq!(albums.len(), 2);
+        let unknown = albums.iter().find(|a| a.album == "Unknown Album").unwrap();
+        assert_eq!(unknown.artist, "Unknown Artist");
+        assert_eq!(unknown.track_count, 2);
+
+        let artists = s.artists().unwrap();
+        assert!(artists.contains(&"Unknown Artist".to_string()));
+
+        // Tapping the bucket must return its tracks (grouping + detail agree).
+        let tracks = s.tracks_by_album("Unknown Album", "Unknown Artist").unwrap();
+        assert_eq!(tracks.len(), 2);
+
+        // Tagged albums are unaffected.
+        assert_eq!(s.tracks_by_album("Discovery", "Daft Punk").unwrap().len(), 1);
     }
 
     #[test]

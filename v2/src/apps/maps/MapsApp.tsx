@@ -12,6 +12,7 @@ import "./nav/nav.css";
 // overlays, destination search, route preview, and turn-by-turn guidance.
 export default function MapsApp() {
   const status = useNavigationStore((s) => s.status);
+  const isOffRoute = useNavigationStore((s) => s.isOffRoute);
   const setSearchOpen = useNavigationStore((s) => s.setSearchOpen);
 
   return (
@@ -25,6 +26,11 @@ export default function MapsApp() {
         </button>
       )}
 
+      {status === "navigating" && isOffRoute && (
+        <div className="reroute-chip" role="status">
+          Rerouting…
+        </div>
+      )}
       <TurnBanner />
       <RoutePreview />
       <NavStatusBar />

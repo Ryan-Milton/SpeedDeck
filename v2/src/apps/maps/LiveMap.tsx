@@ -3,9 +3,11 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 import { resolveMapStyle, checkOnlineStyle } from "./map-style";
+import { MAP_ACCENT, MAP_ACCENT_GLOW, MAP_ROUTE_OUTLINE } from "./theme";
 import { useVehicleStore } from "../../stores/vehicle-store";
 import { useSettingsStore } from "../../stores/settings-store";
 import { useNavigationStore } from "../../stores/navigation-store";
+import { useMapStore } from "../../stores/map-store";
 
 const DEFAULT_ZOOM = 16;
 const DRIVING_PITCH = 50;
@@ -47,6 +49,14 @@ export default function LiveMap() {
       });
       mapRef.current = map;
 
+      // A user gesture takes the camera; the recenter FAB gives it back.
+      const unfollow = (e: { originalEvent?: unknown }) => {
+        if (e.originalEvent) useMapStore.getState().setFollowing(false);
+      };
+      map.on("dragstart", unfollow);
+      map.on("zoomstart", unfollow);
+      map.on("rotatestart", unfollow);
+
       map.on("load", () => {
         readyRef.current = true;
         addRouteLayers(map);
@@ -79,6 +89,8 @@ export default function LiveMap() {
 
       const src = map.getSource("vehicle") as maplibregl.GeoJSONSource | undefined;
       src?.setData(pointFeature(fix.longitude, fix.latitude));
+
+      if (!useMapStore.getState().following) return;
 
       const orientation = useSettingsStore.getState().mapOrientation;
       if (orientation === "north-up") {
@@ -118,6 +130,24 @@ export default function LiveMap() {
       });
     });
     return unsub;
+  }, []);
+
+  // --- recenter when follow mode is restored ---
+  useEffect(() => {
+    return useMapStore.subscribe((s) => {
+      const map = mapRef.current;
+      const fix = lastFixRef.current;
+      if (!s.following || !map || !readyRef.current || !fix) return;
+      const orientation = useSettingsStore.getState().mapOrientation;
+      map.easeTo({
+        center: [fix.lon, fix.lat],
+        zoom: DEFAULT_ZOOM,
+        bearing: orientation === "north-up" ? 0 : fix.heading,
+        pitch: orientation === "north-up" ? 0 : DRIVING_PITCH,
+        padding: orientation === "north-up" ? { top: 0, bottom: 0, left: 0, right: 0 } : CAMERA_PADDING,
+        duration: 400,
+      });
+    });
   }, []);
 
   // --- draw / clear the active route ---
@@ -174,14 +204,14 @@ function addRouteLayers(map: maplibregl.Map) {
     type: "line",
     source: "route",
     layout: { "line-cap": "round", "line-join": "round" },
-    paint: { "line-width": 9, "line-color": "#000000", "line-opacity": 0.35 },
+    paint: { "line-width": 9, "line-color": MAP_ROUTE_OUTLINE, "line-opacity": 0.35 },
   });
   map.addLayer({
     id: "route-line",
     type: "line",
     source: "route",
     layout: { "line-cap": "round", "line-join": "round" },
-    paint: { "line-width": 6, "line-color": "#0A84FF", "line-opacity": 0.9 },
+    paint: { "line-width": 6, "line-color": MAP_ACCENT, "line-opacity": 0.9 },
   });
 }
 
@@ -202,7 +232,7 @@ function addVehicleLayers(map: maplibregl.Map, center: [number, number]) {
     id: "vehicle-glow",
     type: "circle",
     source: "vehicle",
-    paint: { "circle-radius": 12, "circle-color": "#0A84FF", "circle-opacity": 0.3, "circle-blur": 0.5 },
+    paint: { "circle-radius": 12, "circle-color": MAP_ACCENT_GLOW, "circle-blur": 0.5 },
   });
   map.addLayer({
     id: "vehicle-dot",
@@ -210,7 +240,7 @@ function addVehicleLayers(map: maplibregl.Map, center: [number, number]) {
     source: "vehicle",
     paint: {
       "circle-radius": 7,
-      "circle-color": "#0A84FF",
+      "circle-color": MAP_ACCENT,
       "circle-stroke-width": 3,
       "circle-stroke-color": "#FFFFFF",
     },

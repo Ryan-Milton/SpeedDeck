@@ -1,5 +1,6 @@
 import { music, albumArtUrl, type RepeatMode } from "../../lib/music";
 import { prettyTitle } from "../../lib/track-name";
+import { formatDuration } from "../../lib/format";
 import { useMusicStore } from "../../stores/music-store";
 import { HudFrame, IconButton, Slider, EmptyState } from "../../components";
 import {
@@ -14,11 +15,6 @@ import {
 } from "./transport-icons";
 import { MusicIcon } from "../icons";
 import "./music.css";
-
-function fmt(ms: number): string {
-  const s = Math.max(0, Math.round(ms / 1000));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-}
 
 const NEXT_REPEAT: Record<RepeatMode, RepeatMode> = { off: "all", all: "one", one: "off" };
 const REPEAT_LABEL: Record<RepeatMode, string> = {
@@ -62,7 +58,7 @@ export default function NowPlayingApp() {
       </div>
 
       <div className="np-scrubber">
-        <span className="np-time">{fmt(pos)}</span>
+        <span className="np-time">{formatDuration(pos)}</span>
         <Slider
           ariaLabel="Seek"
           value={Math.min(pos, dur || pos)}
@@ -70,7 +66,7 @@ export default function NowPlayingApp() {
           max={Math.max(dur, 1)}
           onChange={(v) => music.seek(v).catch(() => {})}
         />
-        <span className="np-time">{dur ? fmt(dur) : "--:--"}</span>
+        <span className="np-time">{dur ? formatDuration(dur) : "--:--"}</span>
       </div>
 
       <div className="np-transport">

@@ -1,9 +1,16 @@
-import { speedConvert, cardinalDirection, type SpeedUnit } from "../../lib/units";
+import { speedConvert, cardinalDirection, speedUnitLabel } from "../../lib/units";
 import { useVehicleStore } from "../../stores/vehicle-store";
 import { useSettingsStore } from "../../stores/settings-store";
+import { useMapStore } from "../../stores/map-store";
 
-function unitLabel(u: SpeedUnit): string {
-  return u === "mph" ? "MPH" : u === "kmh" ? "KM/H" : "KN";
+function RecenterGlyph({ size = 22 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2} strokeLinejoin="round">
+      <path d="M12 3v3M12 18v3M3 12h3M18 12h3" strokeLinecap="round" />
+      <circle cx="12" cy="12" r="5" />
+      <circle cx="12" cy="12" r="1.6" fill="white" stroke="none" />
+    </svg>
+  );
 }
 
 function CompassGlyph({ size = 22 }: { size?: number }) {
@@ -21,6 +28,8 @@ export default function MapOverlays() {
   const unit = useSettingsStore((s) => s.speedUnit);
   const orientation = useSettingsStore((s) => s.mapOrientation);
   const toggleOrientation = useSettingsStore((s) => s.toggleMapOrientation);
+  const following = useMapStore((s) => s.following);
+  const setFollowing = useMapStore((s) => s.setFollowing);
 
   const hasFix = !!state && state.fix.fixQuality > 0;
   const speed = hasFix ? Math.round(speedConvert(state.smoothedSpeed, unit)) : null;
@@ -39,7 +48,7 @@ export default function MapOverlays() {
       <div className="map-overlay top-right">
         <div className="pill speed-pill">
           <span className="pill-speed">{speed !== null ? speed : "--"}</span>
-          <span className="pill-unit">{unitLabel(unit)}</span>
+          <span className="pill-unit">{speedUnitLabel(unit)}</span>
         </div>
       </div>
 
@@ -51,6 +60,11 @@ export default function MapOverlays() {
         >
           <CompassGlyph size={22} />
         </button>
+        {!following && (
+          <button className="map-fab recenter" onClick={() => setFollowing(true)} aria-label="Recenter map">
+            <RecenterGlyph size={22} />
+          </button>
+        )}
       </div>
     </>
   );

@@ -27,6 +27,12 @@
   text-transform: uppercase;
   color: var(--text);
 }
+/* Current street replaces the wordmark while driving — plain title case. */
+.status-left.street {
+  letter-spacing: 0.04em;
+  text-transform: none;
+  max-width: 40%;
+}
 .status-right {
   display: flex;
   align-items: center;
@@ -80,6 +86,11 @@
   inset: 0;
   animation: hud-fade-in var(--dur-med) var(--ease-hud);
 }
+/* Inactive apps stay mounted (warm MapLibre, preserved scroll) but hidden.
+   display:none also cancels the fade-in so it replays on reveal. */
+.content-screen.hidden {
+  display: none;
+}
 @keyframes hud-fade-in {
   from {
     opacity: 0;
@@ -93,7 +104,7 @@
 .app-screen {
   height: 100%;
   padding: var(--space-6) var(--space-8);
-  padding-bottom: 104px; /* clear the floating dock */
+  padding-bottom: var(--dock-clearance);
   overflow-y: auto;
 }
 .app-screen h2 {
@@ -145,7 +156,7 @@
     box-shadow var(--dur-fast) var(--ease-hud);
 }
 .dock-launch:active {
-  transform: scale(0.93);
+  transform: scale(var(--press-scale));
 }
 .dock-launch.on,
 .dock-launch:focus-visible {
@@ -184,8 +195,12 @@
   text-align: center;
   margin-bottom: var(--space-6);
 }
+/* Paging clip needs breathing room, or it shears the current-app ring/glow
+   off tiles in the first and last rows. */
 .launchpad-viewport {
   overflow: hidden;
+  padding: var(--space-3);
+  margin: calc(-1 * var(--space-3));
 }
 .launchpad-track {
   display: flex;
@@ -217,82 +232,11 @@
   box-shadow: 0 0 8px var(--accent-glow);
 }
 
-/* =========================================================================
-   Legacy per-screen styles — migrated to per-app CSS in Phase C2.
-   Kept here so Dashboard / Trips / Settings render during the transition.
-   ========================================================================= */
+/* Fallback surface for not-yet-built apps (ComingSoon). */
 .app-placeholder {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-}
-.settings {
-  overflow-y: auto;
-}
-.settings-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 16px 4px;
-  border-bottom: 1px solid var(--hud-line-idle);
-  font-size: var(--text-md);
-}
-.offline-maps {
-  margin-top: 28px;
-}
-.offline-maps h3 {
-  font-size: 20px;
-  font-weight: 600;
-  margin-bottom: 8px;
-}
-.dl-progress {
-  margin-top: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.dl-bar {
-  height: 8px;
-  border-radius: 4px;
-  background: var(--surface-2);
-  overflow: hidden;
-}
-.dl-fill {
-  height: 100%;
-  background: var(--accent);
-  transition: width 0.2s ease;
-}
-.music-folder-path {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 70%;
-  font-size: 14px;
-  color: var(--text-muted);
-}
-.settings-actions {
-  margin-top: 20px;
-  display: flex;
-  gap: 12px;
-}
-.rec-btn {
-  background: var(--surface-2);
-  color: var(--text);
-  border: none;
-  border-radius: var(--radius-md);
-  padding: 12px 18px;
-  font-size: 15px;
-  font-weight: 600;
-  font-family: var(--font-display);
-  min-height: 52px;
-  cursor: pointer;
-}
-.rec-btn.start {
-  background: var(--alert-soft);
-  color: var(--alert);
-}
-.rec-btn.stop {
-  background: var(--alert);
-  color: #fff;
+  gap: var(--space-2);
 }

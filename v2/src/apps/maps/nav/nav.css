@@ -71,7 +71,7 @@
 /* Nav status bar (bottom — clears the dock) */
 .nav-statusbar {
   position: absolute;
-  bottom: 104px;
+  bottom: var(--dock-clearance);
   left: 50%;
   transform: translateX(-50%);
   z-index: 7;
@@ -129,7 +129,7 @@
 /* Route preview (bottom sheet — clears the dock) */
 .route-preview {
   position: absolute;
-  bottom: 104px;
+  bottom: var(--dock-clearance);
   left: 16px;
   right: 16px;
   z-index: 7;

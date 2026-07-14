@@ -1,15 +1,35 @@
 import { useVehicleStore } from "../../stores/vehicle-store";
-import { HudPanel, SectionHeader, SettingsRow } from "../../components";
+import { useSettingsStore } from "../../stores/settings-store";
+import type { SpeedUnit } from "../../lib/units";
+import { HudPanel, SectionHeader, SettingsRow, ListRow, Tabs, AppHeader } from "../../components";
 import OfflineMapsSection from "./OfflineMapsSection";
 import MusicSection from "./MusicSection";
 import "./settings.css";
 
+const UNIT_TABS: { id: SpeedUnit; label: string }[] = [
+  { id: "mph", label: "MPH" },
+  { id: "kmh", label: "KM/H" },
+  { id: "knots", label: "Knots" },
+];
+
 // Settings/about surface — grouped HUD panels.
 export default function SettingsApp() {
   const state = useVehicleStore((s) => s.state);
+  const speedUnit = useSettingsStore((s) => s.speedUnit);
+  const setSpeedUnit = useSettingsStore((s) => s.setSpeedUnit);
   return (
     <div className="app-screen settings">
-      <h2>Settings</h2>
+      <AppHeader title="Settings" />
+
+      <SectionHeader title="Display" />
+      <HudPanel brackets={false} className="settings-panel">
+        <div className="settings-list">
+          <ListRow
+            label="Speed unit"
+            value={<Tabs tabs={UNIT_TABS} value={speedUnit} onChange={setSpeedUnit} />}
+          />
+        </div>
+      </HudPanel>
 
       <SectionHeader title="System" />
       <HudPanel brackets={false} className="settings-panel">
